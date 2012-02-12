@@ -1,0 +1,14 @@
+#! /bin/bash -e
+
+if [[ -e "$(git config --get zynga.gittools.path)" ]]; then
+	. $(git config --get zynga.gittools.path)/capture
+elif [[ -e ./gittools ]]; then
+	. gittools/capture
+else
+	echo "Install zynga.gittools to suppress output when no errors are detected"
+fi
+
+against=HEAD
+if ! git rev-parse --verify HEAD &>/dev/null; then
+	against='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+fi

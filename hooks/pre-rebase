@@ -1,0 +1,26 @@
+#! /bin/bash -e
+
+# This hook will run all configured hooks found in:
+#     git config --get-all zynga.gittools.hooks.pre-rebase
+# It will fail if any of those fail on a command (see '-e') or if 
+# they return non-zero exit codes.
+#
+# The hooks wil be run sequentially by default for safety. 
+# If you determine that your hooks can be run in parallel, enable it with:
+#     git config --set zynga.gittools.hooks.pre-rebase.parallel <num>
+# where <num> is the number of jobs you wish to start. If 0, one job
+# will be started for each CPU on the machine.
+# For safety, you can check for parallel execution in your hook by
+# checking the existence of the gittools_parallel variable.
+#     [[ -z $gittools_parallel ]] # Will fail the hook unless they are being run sequentially.
+ 
+gittools_parallel=
+if git config --get zynga.gittools.hooks.pre-rebase.parallel; then
+	if [[ $(git config --get zynga.gittools.hooks.pre-rebase.parallel) -eq 0 ]]; then
+		gittools_parallel="-P $(grep -c processor /proc/cpuinfo)"
+	else
+		gittools_parallel="-P $(git config --get zynga.gittools.hooks.pre-rebase.parallel)"
+	fi
+fi
+
+git config --get-all zynga.gittools.hooks.pre-rebase | xargs $gittools_parallel bash -e

@@ -1,0 +1,33 @@
+#! /bin/bash -e
+
+function find_repo () {
+	while [[ $PWD != '/' ]] && [[ ! -e .git ]]; do
+		pushd '..' >/dev/null
+	done
+	[[ -e .git ]] && pwd
+}
+
+if REPO=$(find_repo); then
+	echo "Installing gittools to $REPO"
+else 
+	! echo "Not in a git repository"
+fi
+
+if GITTOOLS=$(git config --get zynga.gittools.path) || 
+   ([[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools); then
+	echo "Found gittools at $GITTOOLS"
+else
+	! echo "Could not find gittools"
+fi
+
+if [[ 0 -ne $(ls --file-type ../.git/hooks/ | xargs -n 1 | grep -vc "\.sample"$) ]]; then
+	echo "Move the following hooks aside so that install can continue:"
+	ls --file-type ../.git/hooks/ | xargs -n 1 | grep -v "\.sample$" | sed "s/^/  /g"
+	echo -e "\nYou can enable them by adding them to your git config:"
+	echo -e "  git config --add zynga.gittools.hooks.<hook name> <hook script>"
+	false
+fi
+
+cp -v $GITTOOLS/hooks/* $REPO/.git/hooks
+
+echo 'good'
