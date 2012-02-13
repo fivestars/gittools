@@ -1,0 +1,95 @@
+#! /bin/bash -e
+
+HOOKS=( applypatch-msg commit-msg post-commit post-receive post-update pre-applypatch pre-commit pre-rebase prepare-commit-msg update )
+MOVE_HOOKS=
+OVERWRITE_HOOKS=
+while getopts ":m:o" OPT; do
+	case $OPT in
+		m) MOVE_HOOKS=$OPTARG;;
+		o) OVERWRITE_HOOKS=1; [[ -z $MOVE_HOOKS ]] && MOVE_HOOKS=gt_old;;
+		\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
+	esac
+done
+
+function find_repo () {
+	while [[ $PWD != '/' ]] && [[ ! -e .git ]]; do
+		pushd '..' >/dev/null
+	done
+	[[ -e .git ]] && pwd
+}
+
+if GITTOOLS=$(git config --get zynga.gittools.path) || 
+   ([[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools); then
+	echo -e "Found gittools at:\t$GITTOOLS"
+else
+	! echo "Could not find gittools"
+fi
+
+if REPO=$(find_repo); then
+	echo -e "Installing hooks to:\t$REPO"
+else 
+	! echo "Not in a git repository"
+fi
+
+fifo_src=$(mktemp -u)
+fifo_dest=$(mktemp -u)
+mkfifo $fifo_src
+mkfifo $fifo_dest
+trap "rm -f $fifo_src $fifo_dest" EXIT SIGHUP SIGINT SIGTERM
+
+ls --file-type $GITTOOLS/hooks | sort > $fifo_src &
+ls --file-type $REPO/.git/hooks | sort > $fifo_dest &
+
+blocking=$(comm -12 $fifo_src $fifo_dest)
+rm -f $fifo_src $fifo_dest
+trap - EXIT SIGHUP SIGINT SIGTERM
+
+if [[ -n $blocking ]]; then
+	if [[ -n $MOVE_HOOKS ]]; then
+		echo $blocking | sed "s/ /\n/g" | xargs  -I % mv $REPO/.git/hooks/% $REPO/.git/hooks/%.$MOVE_HOOKS
+		trap "echo \"${blocking[@]}\" | xargs -n1 -I % mv $REPO/.git/hooks/%.$MOVE_HOOKS $REPO/.git/hooks/% " EXIT SIGHUP SIGINT SIGTERM
+	else
+		echo "Specify -m <suffix> to move the following hooks aside or -o to force overwriting so that install can continue:"
+		echo $blocking | xargs -n1 | sed "s/^/    /"
+		echo -e "\nYou can enable them after this install is complete by adding them to your git config:"
+		echo "  git config --add zynga.gittools.hooks.<hook name> <hook script>"
+		exit 1
+	fi
+else
+	trap "ls --file-type $GITTOOLS/hooks | xargs -n1 -I % rm $REPO/.git/hooks/%" EXIT SIGHUP SIGINT SIGTERM
+fi
+
+# Install the hooks
+cp $GITTOOLS/hooks/* $REPO/.git/hooks
+
+# Display all the files that were copied into your repository's hooks directory
+echo -e "\nInstalled hooks:"
+ls --file-type $GITTOOLS/hooks | xargs -n1 | sed "s/^/    /"
+echo 
+
+# For each non-base hook, ask if you want to enable it for your repository
+for installed in $(ls --file-type $GITTOOLS/hooks | grep $(echo "\(${HOOKS[@]}\)" | sed "s/ /\\\|/g")-); do
+	for hook in ${HOOKS[@]}; do
+		(echo $installed | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
+	done
+	if ! (git config --get-all $hook | grep -q ^"$installed"$); then
+		echo -ne "Enable $installed for this repository? (Y/n) "
+		read answer
+		if [[ -z $answer || "y" == $answer ]]; then
+			git config --add $hook $installed
+		else
+			echo "    Skipped $installed"
+		fi
+	else
+		echo "$installed already enabled"
+	fi
+done
+
+if [[ -n $OVERWRITE_HOOKS ]]; then
+	rm -f $REPO/.git/hooks/*.$MOVE_HOOKS
+fi
+
+trap - EXIT SIGHUP SIGINT SIGTERM
+
+echo -e "\nEnabled hooks:"
+git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"

@@ -1,0 +1,60 @@
+#! /bin/bash -e
+
+HOOK=$1
+
+# This script will run all configured hooks found in:
+#     git config --get-all zynga.gittools.hooks.$HOOK
+# It will fail if any of those fail on a command (see '-e') or if 
+# they return non-zero exit codes.
+#
+# The hooks wil be run sequentially by default for safety. 
+# If you determine that your hooks can be run in parallel, enable it with:
+#     git config --set zynga.gittools.hooks.$HOOK.parallel <num>
+# where <num> is the number of jobs you wish to start. If 0, one job
+# will be started for each CPU on the machine.
+# For safety, you can check for parallel execution in your hook by
+# checking the existence of the gittools_parallel variable.
+#     [[ -z $gittools_parallel ]] # Will fail the hook unless they are being run sequentially.
+ 
+[[ -n $gittools ]] && . $gittools/capture -q || ! echo "You must install zynga.gittools"
+
+gittools_parallel=
+if git config --get zynga.gittools.hooks.$HOOK.parallel; then
+	if [[ 0 -eq $(git config --get zynga.gittools.hooks.$HOOK.parallel) ]]; then
+		gittools_parallel="-P $(grep -c processor /proc/cpuinfo)"
+	else
+		gittools_parallel="-P $(git config --get zynga.gittools.hooks.$HOOK.parallel)"
+	fi
+fi
+
+# Finds the file path to the indicated hook
+function find_hook () {
+	# Check for absolute path first
+	[[ -e $1 ]] && echo $1 && return
+
+	# Local repository hooks
+	[[ -e .git/hooks/$1 ]] && echo .git/hooks/$1 && return
+
+	# Check gittools last
+	[[ -e $gittools/hooks/$1 ]] && echo $gittools/hooks/$1 && return
+
+	# Could not find hook
+	return 1
+}
+
+# Make sure that each hook can be found, otherwise fail after running the ones we found
+gittools_hooks=( )
+gittools_fail=0
+for hook in $(git config --get-all zynga.gittools.hooks.$HOOK); do
+	if ! found=$(find_hook $hook); then
+		echo "Could not find hook: $hook"
+		gittools_fail=1
+	else
+		gittools_hooks[${#gittools_hooks[@]}]=$found
+	fi
+done
+
+unset find_hook hook found
+echo ${gittools_hooks[@]} | xargs -n1 bash $gittools_parallel -e
+
+exit $gittools_fail

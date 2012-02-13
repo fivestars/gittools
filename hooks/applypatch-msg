@@ -1,26 +1,12 @@
 #! /bin/bash -e
 
-# This hook will run all configured hooks found in:
-#     git config --get-all zynga.gittools.hooks.applypatch-msg
-# It will fail if any of those fail on a command (see '-e') or if 
-# they return non-zero exit codes.
-#
-# The hooks wil be run sequentially by default for safety. 
-# If you determine that your hooks can be run in parallel, enable it with:
-#     git config --set zynga.gittools.hooks.applypatch-msg.parallel <num>
-# where <num> is the number of jobs you wish to start. If 0, one job
-# will be started for each CPU on the machine.
-# For safety, you can check for parallel execution in your hook by
-# checking the existence of the gittools_parallel variable.
-#     [[ -z $gittools_parallel ]] # Will fail the hook unless they are being run sequentially.
- 
-gittools_parallel=
-if git config --get zynga.gittools.hooks.applypatch-msg.parallel; then
-	if [[ $(git config --get zynga.gittools.hooks.applypatch-msg.parallel) -eq 0 ]]; then
-		gittools_parallel="-P $(grep -c processor /proc/cpuinfo)"
-	else
-		gittools_parallel="-P $(git config --get zynga.gittools.hooks.applypatch-msg.parallel)"
-	fi
+# Check for the configured gittools path first, then look in the current repository (perhaps you submoduled it)
+if gittools=$(git config --get zynga.gittools.path || echo './gittools') && [[ -e $gittools ]]; then
+	# Invoke the multiplexer
+	export gittools
+	$(git config --get zynga.gittools.path)/hook_runner $(basename $0)
+else
+	echo "git $(basename $0) hooks failed. You must provide the path to gittools:"
+	echo "    git config [--global] --add zynga.gittools.path </path/to/gittools>"
+	exit 1	
 fi
-
-git config --get-all zynga.gittools.hooks.applypatch-msg | xargs $gittools_parallel bash -e
