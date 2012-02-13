@@ -21,9 +21,9 @@ HOOK=$1
 gittools_parallel=
 if git config --get zynga.gittools.hooks.$HOOK.parallel; then
 	if [[ 0 -eq $(git config --get zynga.gittools.hooks.$HOOK.parallel) ]]; then
-		gittools_parallel="-P $(grep -c processor /proc/cpuinfo)"
+		export gittools_parallel="-P $(grep -c processor /proc/cpuinfo)"
 	else
-		gittools_parallel="-P $(git config --get zynga.gittools.hooks.$HOOK.parallel)"
+		export gittools_parallel="-P $(git config --get zynga.gittools.hooks.$HOOK.parallel)"
 	fi
 fi
 
@@ -55,6 +55,6 @@ for hook in $(git config --get-all zynga.gittools.hooks.$HOOK); do
 done
 
 unset find_hook hook found
-echo ${gittools_hooks[@]} | xargs -n1 bash $gittools_parallel -e capture
+echo ${gittools_hooks[@]} | xargs -n1 $gittools_parallel  bash -e capture
 
 exit $gittools_fail
