@@ -1,22 +1,25 @@
 #!/bin/sh
 
-# 
+# This script will run a given command/script and pass to it any provided additional arguments
+# stdout and stderr will be buffered and only released if the wrapped
+# script exits with a non-zero error code.
+
 # To be run when this script receives the EXIT signal
 function capture_on_exit () {
 	# Store the exit code
 	result=$?
-
+	
 	# Fix our stdout and stderr
 	exec 1>&11 2>&12 11>&- 12>&-
 
 	# If we have a non-zero exit code, display the buffered output
 	if [[ $result -ne 0 ]]; then
-		echo "$1 exited with error code $result"
-		cat $2
+		echo "$2 exited with error code $result"
+		cat $1
 	fi
 
 	# Remove the buffered output file
-	rm -f $2
+	rm -f $1
 }
 
 # Create the temorary output buffer
@@ -26,6 +29,7 @@ capture_outfile=$(mktemp)
 exec 11>&1 12>&2 &>$capture_outfile
 
 # Set our exit trap to display any errors and do our clean up 
-trap "capture_on_exit $1 $capture_outfile" EXIT SIGHUP SIGINT SIGTERM
+trap "capture_on_exit $capture_outfile $1" EXIT SIGHUP SIGINT SIGTERM
 
+# Call the wrapped script
 bash -e $*
