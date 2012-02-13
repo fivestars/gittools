@@ -6,22 +6,12 @@ function capture_on_exit () {
 	# Store the exit code
 	result=$?
 
-	# Check our options
-	local OPTIND OPTERR OPTARG opt quiet
-	while getopts ":q" opt; do
-		case $opt in
-			q) quiet=1;;
-			\?) ;;
-		esac
-	done
-	shift $(( OPTIND - 1 ))
-	
 	# Fix our stdout and stderr
 	exec 1>&11 2>&12 11>&- 12>&-
 
 	# If we have a non-zero exit code, display the buffered output
 	if [[ $result -ne 0 ]]; then
-		[[ -z $quiet ]] && echo "$1 exited with error code $result "
+		echo "$1 exited with error code $result"
 		cat $2
 	fi
 
@@ -36,6 +26,6 @@ capture_outfile=$(mktemp)
 exec 11>&1 12>&2 &>$capture_outfile
 
 # Set our exit trap to display any errors and do our clean up 
-trap "capture_on_exit $@ $capture_outfile" EXIT SIGHUP SIGINT SIGTERM
+trap "capture_on_exit $1 $capture_outfile" EXIT SIGHUP SIGINT SIGTERM
 
 bash -e $*
