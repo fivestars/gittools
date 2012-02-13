@@ -13,16 +13,16 @@ HOOK=$1
 # where <num> is the number of jobs you wish to start. If 0, one job
 # will be started for each CPU on the machine.
 # For safety, you can check for parallel execution in your hook by
-# checking the existence of the gittools_parallel variable.
-#     [[ -z $gittools_parallel ]] # Will fail the hook unless they are being run sequentially.
+# checking the existence of the gittools_hooks_parallel variable.
+#     [[ -z $gittools_hooks_parallel ]] # Will fail the hook unless they are being run sequentially.
 
 [[ -n $gittools ]] || !  echo "You must install zynga.gittools"
 
-if gittools_parallel=$(git config --get zynga.gittools.hooks.$HOOK.parallel); then
-	if [[ "0" == "${gittools_parallel}" ]]; then
-		export gittools_parallel="-P $(grep -c processor /proc/cpuinfo)"
+if gittools_hooks_parallel=$(git config --get zynga.gittools.hooks.$HOOK.parallel); then
+	if [[ "0" == "${gittools_hooks_parallel}" ]]; then
+		export gittools_hooks_parallel="-P $(grep -c processor /proc/cpuinfo)"
 	else
-		export gittools_parallel="-P $(git config --get zynga.gittools.hooks.$HOOK.parallel)"
+		export gittools_hooks_parallel="-P $(git config --get zynga.gittools.hooks.$HOOK.parallel)"
 	fi
 fi
 
@@ -55,7 +55,7 @@ done
 
 # Run the hooks through xargs. If any of them fail, xargs will fail and the script
 # will exit with an error code due to the -e at the top of this script.
-echo ${gittools_hooks[@]} | xargs -n1 $gittools_parallel  bash -e capture
+echo ${gittools_hooks[@]} | xargs -n1 $gittools_hooks_parallel  bash -e capture
 
 # Fail the hook if we couldn't find one of the hook scripts (even though we ran
 # the ones we found and encountered no errors)

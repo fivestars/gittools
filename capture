@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This script will run a given command/script and pass to it any provided additional arguments
+# This script will run a given command/script and pass to it any provided additional arguments.
 # stdout and stderr will be buffered and only released if the wrapped
 # script exits with a non-zero error code.
 
@@ -8,7 +8,7 @@
 function capture_on_exit () {
 	# Store the exit code
 	result=$?
-	
+
 	# Fix our stdout and stderr
 	exec 1>&11 2>&12 11>&- 12>&-
 
