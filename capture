@@ -1,12 +1,18 @@
 #!/bin/sh
 
-# Source this from your git hooks. It will buffer and stdout and stderr data
-# and only display it if your scripts exits with a non-zero exit code.
-# Globals - do not use or overwrite these:
+# Source this from your git hooks. It will buffer any stdout and stderr data
+# and only display it if your scripts exit with a non-zero exit code.
+#
+# Usage:
+#      . capture [-q]
+#   -q: Suppress the 'Exitting with error code...' message
+#
+# Globals - do not use or overwrite these in your script:
 #    variable $capture_outfile
 #    function $capture_on_exit() {}
 #    trap on EXIT SIGHUP SIGINT SIGTERM
 #    file descriptors: 11, 12
+#
 # Example usage:
 #   . capture # will source this file from your script
 
@@ -41,8 +47,8 @@ function capture_on_exit () {
 # Create the temorary output buffer
 capture_outfile=$(mktemp)
 
-# Store stdout and stderr, then them to the buffer
+# Store stdout and stderr, then redirect them to the buffer
 exec 11>&1 12>&2 &>$capture_outfile
 
-# Set our exit trap to disply any errors and do our clean up 
+# Set our exit trap to display any errors and do our clean up 
 trap "capture_on_exit $@ $capture_outfile" EXIT SIGHUP SIGINT SIGTERM
