@@ -4,7 +4,7 @@
 if gittools=$(git config --get zynga.gittools.path || echo './gittools') && [[ -e $gittools ]]; then
 	# Invoke the multiplexer
 	export gittools
-	$(git config --get zynga.gittools.path)/hooks_runner $(basename $0)
+	$gittools/hooks_runner $(basename $0) $*
 else
 	echo "git $(basename $0) hooks failed. You must provide the path to gittools:"
 	echo "    git config [--global] --add zynga.gittools.path </path/to/gittools>"

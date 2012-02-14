@@ -62,7 +62,10 @@ if [[ -n $blocking ]]; then
 fi
 
 # Install the hooks
-cp $GITTOOLS/hooks/* $REPO/.git/hooks
+echo "cp $GITTOOLS/hooks/% $REPO/.git/hooks"
+for hook in ${HOOKS[*]}; do
+	cp $GITTOOLS/hooks/$hook $REPO/.git/hooks
+done
 
 # Display all the files that were copied into your repository's hooks directory
 echo -e "\nInstalled hooks:"
