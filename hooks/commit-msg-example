@@ -1,4 +1,4 @@
 #! /bin/bash -e
 
-# Fails unless the ZDSYS- prefix is found in the commit msg"
-grep "ZDSYS-" < $1
+# Fails unless the ZDSYS- prefix is found in the commit msg
+# grep "ZDSYS-" < $1
