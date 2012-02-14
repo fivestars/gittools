@@ -28,7 +28,7 @@ fi
 
 # Finds the file path to the indicated hook
 function find_hook () {
-	# Check for absolute path first
+	# Check for repository-relative path first
 	[[ -e $1 ]] && echo $1 && return
 
 	# Local repository hooks
