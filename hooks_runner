@@ -55,7 +55,7 @@ done
 
 # Run the hooks through xargs. If any of them fail, xargs will fail and the script
 # will exit with an error code due to the -e at the top of this script.
-echo -e ${gittools_hooks[*]} | xargs -d, -L1 $gittools_hooks_parallel bash -e capture
+echo -e ${gittools_hooks[*]} | xargs -d, -L1 $gittools_hooks_parallel bash -e $gittools/capture
 
 # Fail the hook if we couldn't find one of the hook scripts (even though we ran
 # the ones we found and encountered no errors)
