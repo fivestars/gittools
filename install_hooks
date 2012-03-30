@@ -22,19 +22,20 @@ function find_repo () {
 	[[ -e .git ]] && pwd
 }
 
-if GITTOOLS=$(git config --get zynga.gittools.path) || 
-   ([[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools); then
-	echo -e "Found gittools at:\t$GITTOOLS"
-	[[ -z $SRC ]] && SRC=$GITTOOLS/hooks
-else
-	! echo "Could not find gittools"
-fi
-
 if REPO=$(find_repo); then
 	echo -e "Installing hooks to:\t$REPO"
 else 
-	! echo "Not in a git repository"
+	echo "Not in a git repository" && exit 1
 fi
+
+if GITTOOLS=$(git config --get zynga.gittools.path) || 
+   { [[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools; } then
+	echo -e "Found gittools at:\t$GITTOOLS"
+	[[ -z $SRC ]] && SRC=$GITTOOLS/hooks
+else
+	echo "Could not find gittools" && exit 1
+fi
+
 
 fifo_src=$(mktemp -u)
 fifo_dest=$(mktemp -u)
