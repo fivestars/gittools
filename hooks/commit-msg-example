@@ -1,4 +1,11 @@
 #! /bin/bash -e
 
 # Fails unless the ZDSYS- prefix is found in the commit msg
+echo "This is an example hook to demonstrate commit-msg hook functionality."
+echo "If you're seeing this, it means you've successfully installed gittools.hooks"
+echo "for this repository."
+echo "Disable it like this:"
+echo "    git config --local --unset zynga.gittools.hooks.commit-msg commit-msg-example"
+echo "--------------------------------------------------------------------"
+echo "You must provide a ZDSYS- JIRA ticket number in your commit message"
 grep "ZDSYS-" < $1
