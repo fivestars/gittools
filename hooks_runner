@@ -59,4 +59,7 @@ echo -e ${gittools_hooks[*]} | xargs -d, -L1 $gittools_hooks_parallel bash -e $g
 
 # Fail the hook if we couldn't find one of the hook scripts (even though we ran
 # the ones we found and encountered no errors)
-exit $gittools_fail
+if [[ $gittools_fail != 0 ]]; then
+	echo "Failed $HOOK checks due to missing hooks"
+	exit 1
+fi
