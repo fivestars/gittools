@@ -1,18 +1,19 @@
 #! /bin/bash -e
 
-
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
 MOVE_HOOKS=
 OVERWRITE_HOOKS=
 SRC=
-while getopts "im:os:" OPT; do
-	case $OPT in
-		m) MOVE_HOOKS=$OPTARG;;
-		o) OVERWRITE_HOOKS=1; [[ -z $MOVE_HOOKS ]] && MOVE_HOOKS=gt_old;;
-		s) SRC=$OPTARG;;
-		\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
-	esac
+ALL=
+while getopts "im:os:a" OPT; do
+    case $OPT in
+	m) MOVE_HOOKS=$OPTARG;;
+	o) OVERWRITE_HOOKS=1; [[ -z $MOVE_HOOKS ]] && MOVE_HOOKS=gt_old;;
+	s) SRC=$OPTARG;;
+	a) ALL=1;;
+	\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
+    esac
 done
 
 function find_repo () {
@@ -28,26 +29,42 @@ else
 	echo "Not in a git repository" && exit 1
 fi
 
-if GITTOOLS=$(git config --get zynga.gittools.path) || 
-   { [[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools; } then
-	echo -e "Found gittools at:\t$GITTOOLS"
-else
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+DIR=$( cd -P "$( dirname "$SOURCE" )" && pwd )
+GITTOOLS=$(cd -P "$DIR/../.." && pwd)
 
-	SOURCE="${BASH_SOURCE[0]}"
-	while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
-	DIR=$( cd -P "$( dirname "$SOURCE" )" && pwd )
-	GITTOOLS="$DIR/../.."
+if CONFIG_GITTOOLS=$(git config --get zynga.gittools.path) || 
+    { [[ -e $REPO/gittools ]] && CONFIG_GITTOOLS=$REPO/gittools; } then
 
-	echo -n "Could not find configured gittools. Use \"$GITTOOLS\" for now? (Y/n)"
+    if [[ $(cd $CONFIG_GITTOOLS && pwd) != $(cd $GITTOOLS && pwd) ]]; then
+	echo "Installing from \"$GITTOOLS\", but configured to use gittools at \"CONFIG_GITTOOLS\""
+	echo -n "Continue? (Y/n) "
 	read ANSWER
 	if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
-	    echo "Consider setting git config option: zynga.gittools.path"
-	else
+	    echo "Consider updating git config option: zynga.gittools.path"
+	else      
 	    exit 1
 	fi
+    fi
+else
+    echo
+    echo -n "Set \"$GITTOOLS\" as the global gittools instance for you on this machine? (y/N) "
+    read ANSWER
+    if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
+	git config --global --replace-all zynga.gittools.path $GITTOOLS
+    fi
+    
+    echo
+    echo -n "Set \"$GITTOOLS\" as the gittools instance for this repository? (overrides the global setting) (y/N) "
+    read ANSWER
+    if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
+	git config --local --replace-all zynga.gittools.path $GITTOOLS
+    fi
 fi
 
-[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks
+# Where will we look for our custom hook scripts to be enabled
+[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
 
 
 fifo_src=$(mktemp -u)
@@ -94,25 +111,34 @@ function enable_hooks () {
 	local SRC=$1
 	local available
 	local hook
+	local answer
 
 	# For each non-base hook, ask if you want to enable it for your repository
+	echo "Enabling hooks:"
+	ls --file-type $SRC | xargs -n1 -I {} echo -e "    "{}
+	echo
+
 	for available in $(ls --file-type $SRC); do
-	    local hook
+	    hook=
 
 	    # Make sure each custom hook is associated with an original git hook
 	    for hook in ${HOOKS[@]}; do
 		(echo $available | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
 	    done
-	    
 	    if [[ -z $hook ]]; then
 		"Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
 		continue
 	    fi
 
+	    # Prompt them to enable each one
 	    if ! (git config --get-all $hook | grep -q ^"$available"$); then
-		echo -ne "Enable $available for this repository? (Y/n) "
-		read answer
-		if [[ -z $answer || "y" == $answer ]]; then
+		answer=
+		if [[ -z $ALL ]]; then
+		    echo -ne "Enable $available for this repository? (Y/n) "
+		    read answer
+		fi
+
+		if [[ -z $answer || "Y" == $answer || "y" == $answer ]]; then
 		    git config --add $hook $available
 		else
 		    echo "    Skipped $available"
@@ -126,4 +152,4 @@ function enable_hooks () {
 	git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
 }
 
-enable_hooks $GITTOOLS/modules/hooks/custom-hooks
+enable_hooks $SRC
