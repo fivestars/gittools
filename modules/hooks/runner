@@ -35,7 +35,7 @@ function find_hook () {
 	[[ -e .git/hooks/$1 ]] && echo .git/hooks/$1 && return
 
 	# Check gittools last
-	[[ -e $gittools/modules/hooks/$1 ]] && echo $gittools/modules/hooks/$1 && return
+	[[ -e $gittools/modules/hooks/custom-hooks/$1 ]] && echo $gittools/modules/hooks/custom-hooks/$1 && return
 
 	# Could not find hook
 	return 1

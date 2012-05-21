@@ -32,7 +32,19 @@ if GITTOOLS=$(git config --get zynga.gittools.path) ||
    { [[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools; } then
 	echo -e "Found gittools at:\t$GITTOOLS"
 else
-	echo "Could not find gittools" && exit 1
+
+	SOURCE="${BASH_SOURCE[0]}"
+	while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+	DIR=$( cd -P "$( dirname "$SOURCE" )" && pwd )
+	GITTOOLS="$DIR/../.."
+
+	echo -n "Could not find configured gittools. Use \"$GITTOOLS\" for now? (Y/n)"
+	read ANSWER
+	if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
+	    echo "Consider setting git config option: zynga.gittools.path"
+	else
+	    exit 1
+	fi
 fi
 
 [[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks
@@ -64,14 +76,14 @@ if [[ -n $blocking ]]; then
 fi
 
 # Install the hooks
-echo "cp $GITTOOLS/hooks/% $REPO/.git/hooks"
+echo "cp $GITTOOLS/modules/hooks/git-hooks/% $REPO/.git/hooks"
 for hook in ${HOOKS[*]}; do
-	cp $GITTOOLS/modules/hooks/$hook $REPO/.git/hooks
+	cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
 done
 
 # Display all the files that were copied into your repository's hooks directory
 echo -e "\nInstalled hooks:"
-ls --file-type $GITTOOLS/modules/hooks | xargs -n1 | sed "s/^/    /"
+ls --file-type $GITTOOLS/modules/hooks/git-hooks | xargs -n1 | sed "s/^/    /"
 echo 
 
 if [[ -n $OVERWRITE_HOOKS ]]; then
@@ -81,28 +93,37 @@ fi
 function enable_hooks () {
 	local SRC=$1
 	local available
+	local hook
 
 	# For each non-base hook, ask if you want to enable it for your repository
-	for available  in $(ls --file-type $SRC | grep $(echo "\(${HOOKS[@]}\)" | sed "s/ /\\\|/g")-); do
-		for hook in ${HOOKS[@]}; do
-			(echo $available | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
-		done
+	for available in $(ls --file-type $SRC); do
+	    local hook
 
-		if ! (git config --get-all $hook | grep -q ^"$available"$); then
-			echo -ne "Enable $available for this repository? (Y/n) "
-			read answer
-			if [[ -z $answer || "y" == $answer ]]; then
-				git config --add $hook $available
-			else
-				echo "    Skipped $available"
-			fi
+	    # Make sure each custom hook is associated with an original git hook
+	    for hook in ${HOOKS[@]}; do
+		(echo $available | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
+	    done
+	    
+	    if [[ -z $hook ]]; then
+		"Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
+		continue
+	    fi
+
+	    if ! (git config --get-all $hook | grep -q ^"$available"$); then
+		echo -ne "Enable $available for this repository? (Y/n) "
+		read answer
+		if [[ -z $answer || "y" == $answer ]]; then
+		    git config --add $hook $available
 		else
-			echo "$available already enabled"
+		    echo "    Skipped $available"
 		fi
+	    else
+		echo "$available already enabled"
+	    fi
 	done
 
 	echo -e "\nEnabled hooks:"
 	git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
 }
 
-enable_hooks $GITTOOLS/modules/hooks
+enable_hooks $GITTOOLS/modules/hooks/custom-hooks
