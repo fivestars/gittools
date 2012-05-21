@@ -31,10 +31,11 @@ fi
 if GITTOOLS=$(git config --get zynga.gittools.path) || 
    { [[ -e $REPO/gittools ]] && GITTOOLS=$REPO/gittools; } then
 	echo -e "Found gittools at:\t$GITTOOLS"
-	[[ -z $SRC ]] && SRC=$GITTOOLS/hooks
 else
 	echo "Could not find gittools" && exit 1
 fi
+
+[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks
 
 
 fifo_src=$(mktemp -u)
@@ -65,12 +66,12 @@ fi
 # Install the hooks
 echo "cp $GITTOOLS/hooks/% $REPO/.git/hooks"
 for hook in ${HOOKS[*]}; do
-	cp $GITTOOLS/hooks/$hook $REPO/.git/hooks
+	cp $GITTOOLS/modules/hooks/$hook $REPO/.git/hooks
 done
 
 # Display all the files that were copied into your repository's hooks directory
 echo -e "\nInstalled hooks:"
-ls --file-type $GITTOOLS/hooks | xargs -n1 | sed "s/^/    /"
+ls --file-type $GITTOOLS/modules/hooks | xargs -n1 | sed "s/^/    /"
 echo 
 
 if [[ -n $OVERWRITE_HOOKS ]]; then
@@ -104,4 +105,4 @@ function enable_hooks () {
 	git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
 }
 
-enable_hooks $GITTOOLS/hooks
+enable_hooks $GITTOOLS/modules/hooks
