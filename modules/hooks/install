@@ -4,17 +4,19 @@ HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-rece
 
 MOVE_HOOKS=
 OVERWRITE_HOOKS=
-SRC=
+SKIP_HOOKS=
 ALL=
-while getopts "im:os:a" OPT; do
+while getopts "im:osa" OPT; do
     case $OPT in
 	m) MOVE_HOOKS=$OPTARG;;
 	o) OVERWRITE_HOOKS=1; [[ -z $MOVE_HOOKS ]] && MOVE_HOOKS=gt_old;;
-	s) SRC=$OPTARG;;
+	s) SKIP_HOOKS=1;;
 	a) ALL=1;;
 	\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
     esac
 done
+shift $((OPTIND-1))
+SRC=$1
 
 # Find where this script is being called from
 SOURCE="${BASH_SOURCE[0]}"
@@ -56,10 +58,8 @@ else
     fi
 fi
 
-# Where will we look for our custom hook scripts to enable?
-[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
-
-# 
+# Determine if any git-hooks have already been installed in
+# this repo so that we don't accidentally overwrite them.
 fifo_src=$(mktemp -u)
 fifo_dest=$(mktemp -u)
 mkfifo $fifo_src
@@ -74,76 +74,95 @@ rm -f $fifo_src $fifo_dest
 trap - EXIT SIGHUP SIGINT SIGTERM
 
 if [[ -n $blocking ]]; then
-    if [[ -n $MOVE_HOOKS ]]; then
+    if [[ -n $SKIP_HOOKS ]]; then
+	echo "Skipping the basic hooks installation and proceeding to custom hooks"
+    elif [[ -n $MOVE_HOOKS ]]; then
 	echo $blocking | sed "s/ /\n/g" | xargs  -I % mv $REPO/.git/hooks/% $REPO/.git/hooks/%.$MOVE_HOOKS
     else
 	echo
-	echo "Specify -m <suffix> to move the following hooks aside or -o to force overwriting so that install can continue:"
+	echo "Detected hooks already installed for this repo:"
 	echo $blocking | xargs -n1 | sed "s/^/    /"
-	echo -e "\nYou can enable them after this install is complete by adding them to your git config:"
-	echo "  git config --add zynga.gittools.hooks.<hook name> <hook script>"
+	echo
+	echo "Specify one of the following on the command line to continue installation:"
+	echo "    -s to skip basic hook installation"
+	echo "    -m <suffix> to move these hooks aside"
+	echo "    -o to overwrite existing hooks"
+	echo
 	exit 1
     fi
 fi
 
-# Install the hooks
-echo "cp $GITTOOLS/modules/hooks/git-hooks/* $REPO/.git/hooks"
-for hook in ${HOOKS[*]}; do
-    cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
-done
+# Install the git-hooks
+if [[ -z $SKIP_HOOKS ]]; then
+    echo -e "Installing hooks to:\t$REPO"
+    echo "cp $GITTOOLS/modules/hooks/git-hooks/* $REPO/.git/hooks"
+    for hook in ${HOOKS[*]}; do
+	cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
+    done
+    
+    # Display all the files that were copied into your repository's hooks directory
+    echo -e "\nInstalled hooks:"
+    ls --file-type $GITTOOLS/modules/hooks/git-hooks | xargs -n1 | sed "s/^/    /"
+    echo 
+fi
 
-# Display all the files that were copied into your repository's hooks directory
-echo -e "\nInstalled hooks:"
-ls --file-type $GITTOOLS/modules/hooks/git-hooks | xargs -n1 | sed "s/^/    /"
-echo 
-
+# Remove any old hooks that we move aside (if given '-o')
 if [[ -n $OVERWRITE_HOOKS ]]; then
     rm -f $REPO/.git/hooks/*.$MOVE_HOOKS
 fi
 
+# Now that we've installed our basic hooks, we need to give them things
+# to run. We do this with the enable_hooks function. Any hooks enabled
+# in this fashion are added to this repo's git config settings.
 function enable_hooks () {
-	local SRC=$1
-	local available
-	local hook
-	local answer
-
-	# For each non-base hook, ask if you want to enable it for your repository
-	echo "Enabling hooks:"
-	ls --file-type $SRC | xargs -n1 -I {} echo -e "    "{}
-	echo
-
-	for available in $(ls --file-type $SRC); do
-	    hook=
-
-	    # Make sure each custom hook is associated with an original git hook
-	    for hook in ${HOOKS[@]}; do
-		(echo $available | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
-	    done
-	    if [[ -z $hook ]]; then
-		"Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
-		continue
-	    fi
-
-	    # Prompt them to enable each one
-	    if ! (git config --get-all $hook | grep -q ^"$available"$); then
-		answer=
-		if [[ -z $ALL ]]; then
-		    echo -ne "Enable $available for this repository? (Y/n) "
-		    read answer
-		fi
-
-		if [[ -z $answer || "Y" == $answer || "y" == $answer ]]; then
-		    git config --add $hook $available
-		else
-		    echo "    Skipped $available"
-		fi
-	    else
-		echo "$available already enabled"
-	    fi
+    local SRC=$1
+    local available
+    local hook
+    local answer
+    
+    # For each non-base hook, ask if you want to enable it for your repository
+    echo
+    echo "Enabling hooks:"
+    ls --file-type $SRC | xargs -n1 -I {} echo -e "    "{}
+    echo
+    
+    for available in $(ls --file-type $SRC); do
+	hook=
+	
+	# Make sure each custom hook is associated with an original git hook
+	for hook in ${HOOKS[@]}; do
+	    (echo $available | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
 	done
-
-	echo -e "\nEnabled hooks:"
-	git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
+	if [[ -z $hook ]]; then
+	    "Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
+	    continue
+	fi
+	
+	# Prompt them to enable each one (unless given '-a')
+	if ! (git config --get-all $hook | grep -q ^"$available"$); then
+	    answer=
+	    if [[ -z $ALL ]]; then
+		echo -ne "Enable $available for this repository? (Y/n) "
+		read answer
+	    fi
+	    
+	    if [[ -z $answer || "Y" == $answer || "y" == $answer ]]; then
+		git config --add $hook $available
+	    else
+		echo "    Skipped $available"
+	    fi
+	else
+	    echo "$available already enabled"
+	fi
+    done
+    
+    echo -e "\nEnabled hooks:"
+    git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
 }
 
+# Where will we look for our custom hook scripts to be enabled (given by '-s')
+[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
 enable_hooks $SRC
+
+echo -e "\nYou can enable/disable custom hooks now by modifying your git config:"
+echo "    git config --add zynga.gittools.hooks.<hook name> <hook script>"
