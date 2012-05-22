@@ -24,10 +24,11 @@ while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
 DIR=$( cd -P "$( dirname "$SOURCE" )" && pwd )
 GITTOOLS=$(cd -P "$DIR/../.." && pwd)
 
+# Where will we look for our custom hook scripts to be enabled (given by '-s')
+[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
+
 # Confirm that we're in a git repo
-if REPO=$($GITTOOLS/shell/in-git.sh); then
-    echo -e "Installing hooks to:\t$REPO"
-else 
+if ! REPO=$($GITTOOLS/shell/in-git.sh); then
     echo "Not in a git repository" && exit 1
 fi
 
@@ -44,7 +45,7 @@ if CONFIG_GITTOOLS=$(git config --get zynga.gittools.path) ||
     fi
 else
     echo
-    echo -n "Set \"$GITTOOLS\" as the global gittools instance for you on this machine? (y/N) "
+    echo -n "Set \"$GITTOOLS\" as the global gittools instance for $USER on this machine? (y/N) "
     read ANSWER
     if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
 	git config --global --replace-all zynga.gittools.path $GITTOOLS
@@ -75,7 +76,7 @@ trap - EXIT SIGHUP SIGINT SIGTERM
 
 if [[ -n $blocking ]]; then
     if [[ -n $SKIP_HOOKS ]]; then
-	echo "Skipping the basic hooks installation and proceeding to custom hooks"
+	echo "Skipping the basic hooks installation and proceeding to custom hooks in $SRC"
     elif [[ -n $MOVE_HOOKS ]]; then
 	echo $blocking | sed "s/ /\n/g" | xargs  -I % mv $REPO/.git/hooks/% $REPO/.git/hooks/%.$MOVE_HOOKS
     else
@@ -157,12 +158,11 @@ function enable_hooks () {
     done
     
     echo -e "\nEnabled hooks:"
-    git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
+    git config -l | grep zynga.gittools.hooks | sed "s/^/    /g" 
 }
 
-# Where will we look for our custom hook scripts to be enabled (given by '-s')
-[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
 enable_hooks $SRC
 
 echo -e "\nYou can enable/disable custom hooks now by modifying your git config:"
+echo "    git config -l | grep zynga.gittools.hooks"
 echo "    git config --add zynga.gittools.hooks.<hook name> <hook script>"
