@@ -45,8 +45,15 @@ function ps1-git() {
 	cat /tmp/tmp.git_status | grep "# Untracked files:" >/dev/null && STATII=( "${STATII[*]}" "new" )
 	cat /tmp/tmp.git_status | grep "# Changes not staged for commit:" >/dev/null && STATII=( "${STATII[*]}" "edits" )
 	cat /tmp/tmp.git_status | grep "# Changes to be committed:" >/dev/null && STATII=( "${STATII[*]}" "staged" )
-	cat /tmp/tmp.git_status | grep "# Your branch is behind" >/dev/null && STATII=( "${STATII[*]}" "v" )
-	cat /tmp/tmp.git_status | grep "# Your branch is ahead" >/dev/null && STATII=( "${STATII[*]}" "^" )
+	
+	if cat /tmp/tmp.git_status | grep "# Your branch is behind" >/dev/null; then
+	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is behind" | sed 's/.*by \([0-9]\+\) commits.*/\1v/' ) )
+	fi
+	
+	if cat /tmp/tmp.git_status | grep "# Your branch is ahead" >/dev/null; then
+	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is ahead" | sed 's/.*by \([0-9]\+\) commits.*/\1^/' ) )
+	fi
+	
 	if cat /tmp/tmp.git_status | grep "# Your branch.*have diverged" >/dev/null; then
 	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# and have " | sed 's/.*\s\([0-9]\+\)\s.*\s\([0-9]\+\).*/\1^ \2v/') )
 	fi
