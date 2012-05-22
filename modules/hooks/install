@@ -62,10 +62,8 @@ else
     fi
 fi
 
-# Where will we look for our custom hook scripts to be enabled
-[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
-
-
+# Determine if any git-hooks have already been installed in
+# this repo so that we don't accidentally overwrite them.
 fifo_src=$(mktemp -u)
 fifo_dest=$(mktemp -u)
 mkfifo $fifo_src
@@ -92,7 +90,7 @@ if [[ -n $blocking ]]; then
     fi
 fi
 
-# Install the hooks
+# Install the git-hooks
 echo "cp $GITTOOLS/modules/hooks/git-hooks/* $REPO/.git/hooks"
 for hook in ${HOOKS[*]}; do
     cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
@@ -103,10 +101,14 @@ echo -e "\nInstalled hooks:"
 ls --file-type $GITTOOLS/modules/hooks/git-hooks | xargs -n1 | sed "s/^/    /"
 echo 
 
+# Remove any old hooks that we move aside (if given '-o')
 if [[ -n $OVERWRITE_HOOKS ]]; then
     rm -f $REPO/.git/hooks/*.$MOVE_HOOKS
 fi
 
+# Now that we've installed our basic hooks, we need to give them things
+# to run. We do this with the enable_hooks function. Any hooks enabled
+# in this fashion are added to this repo's git config settings.
 function enable_hooks () {
 	local SRC=$1
 	local available
@@ -130,7 +132,7 @@ function enable_hooks () {
 		continue
 	    fi
 
-	    # Prompt them to enable each one
+	    # Prompt them to enable each one (unless given '-a')
 	    if ! (git config --get-all $hook | grep -q ^"$available"$); then
 		answer=
 		if [[ -z $ALL ]]; then
@@ -152,4 +154,6 @@ function enable_hooks () {
 	git config -l | grep zynga.gittools.hooks | sed "s/^/    /g"
 }
 
+# Where will we look for our custom hook scripts to be enabled (given by '-s')
+[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
 enable_hooks $SRC
