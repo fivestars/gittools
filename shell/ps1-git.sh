@@ -47,11 +47,11 @@ function ps1-git() {
 	cat /tmp/tmp.git_status | grep "# Changes to be committed:" >/dev/null && STATII=( "${STATII[*]}" "staged" )
 	
 	if cat /tmp/tmp.git_status | grep "# Your branch is behind" >/dev/null; then
-	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is behind" | sed 's/.*by \([0-9]\+\) commits.*/\1v/' ) )
+	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is behind" | sed 's/.*by \([0-9]\+\) commit.*/\1v/' ) )
 	fi
 	
 	if cat /tmp/tmp.git_status | grep "# Your branch is ahead" >/dev/null; then
-	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is ahead" | sed 's/.*by \([0-9]\+\) commits.*/\1^/' ) )
+	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is ahead" | sed 's/.*by \([0-9]\+\) commit.*/\1^/' ) )
 	fi
 	
 	if cat /tmp/tmp.git_status | grep "# Your branch.*have diverged" >/dev/null; then
