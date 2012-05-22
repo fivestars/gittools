@@ -1,4 +1,4 @@
-#! /bin/bash -e
+#!  /bin/bash -e
 
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
