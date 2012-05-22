@@ -37,7 +37,7 @@ function ps1-git() {
     if ( [[ $GIT_DIR/.prompt_bounce -nt $GIT_DIR/.prompt_last ]] || # ( info is out of date or
 	    [[ "$1" != "--lazy" ]] ||				    #   we're forcing it or
 								    #   the last command was a successful git command ) and
-	    ( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|merge\|checkout\|reset\)" >/dev/null ) 
+	    ( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) 
 	) && git fetch 2>/dev/null && git status >/tmp/tmp.git_status 2>/dev/null; then			# we succesfully fetched and grabbed the current status
 	
         # Collect our statii in this empty array
