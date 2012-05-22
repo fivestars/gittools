@@ -36,7 +36,6 @@ GITTOOLS=$(cd -P "$DIR/../.." && pwd)
 
 if CONFIG_GITTOOLS=$(git config --get zynga.gittools.path) || 
     { [[ -e $REPO/gittools ]] && CONFIG_GITTOOLS=$REPO/gittools; } then
-
     if [[ $(cd $CONFIG_GITTOOLS && pwd) != $(cd $GITTOOLS && pwd) ]]; then
 	echo "Installing from \"$GITTOOLS\", but configured to use gittools at \"CONFIG_GITTOOLS\""
 	echo -n "Continue? (Y/n) "
@@ -81,21 +80,22 @@ rm -f $fifo_src $fifo_dest
 trap - EXIT SIGHUP SIGINT SIGTERM
 
 if [[ -n $blocking ]]; then
-	if [[ -n $MOVE_HOOKS ]]; then
-		echo $blocking | sed "s/ /\n/g" | xargs  -I % mv $REPO/.git/hooks/% $REPO/.git/hooks/%.$MOVE_HOOKS
-	else
-		echo "Specify -m <suffix> to move the following hooks aside or -o to force overwriting so that install can continue:"
-		echo $blocking | xargs -n1 | sed "s/^/    /"
-		echo -e "\nYou can enable them after this install is complete by adding them to your git config:"
-		echo "  git config --add zynga.gittools.hooks.<hook name> <hook script>"
-		exit 1
-	fi
+    if [[ -n $MOVE_HOOKS ]]; then
+	echo $blocking | sed "s/ /\n/g" | xargs  -I % mv $REPO/.git/hooks/% $REPO/.git/hooks/%.$MOVE_HOOKS
+    else
+	echo
+	echo "Specify -m <suffix> to move the following hooks aside or -o to force overwriting so that install can continue:"
+	echo $blocking | xargs -n1 | sed "s/^/    /"
+	echo -e "\nYou can enable them after this install is complete by adding them to your git config:"
+	echo "  git config --add zynga.gittools.hooks.<hook name> <hook script>"
+	exit 1
+    fi
 fi
 
 # Install the hooks
-echo "cp $GITTOOLS/modules/hooks/git-hooks/% $REPO/.git/hooks"
+echo "cp $GITTOOLS/modules/hooks/git-hooks/* $REPO/.git/hooks"
 for hook in ${HOOKS[*]}; do
-	cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
+    cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
 done
 
 # Display all the files that were copied into your repository's hooks directory
@@ -104,7 +104,7 @@ ls --file-type $GITTOOLS/modules/hooks/git-hooks | xargs -n1 | sed "s/^/    /"
 echo 
 
 if [[ -n $OVERWRITE_HOOKS ]]; then
-	rm -f $REPO/.git/hooks/*.$MOVE_HOOKS
+    rm -f $REPO/.git/hooks/*.$MOVE_HOOKS
 fi
 
 function enable_hooks () {
