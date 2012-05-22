@@ -1,4 +1,4 @@
-#!/bin/sh
+#! /bin/sh
 
 # This script will run a given command/script and pass to it any provided additional arguments.
 # stdout and stderr will be buffered and only released if the wrapped

@@ -1,4 +1,4 @@
-#!  /bin/bash -e
+#! /bin/bash -e
 
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
@@ -16,29 +16,23 @@ while getopts "im:os:a" OPT; do
     esac
 done
 
-function find_repo () {
-	while [[ $PWD != '/' ]] && [[ ! -e .git ]]; do
-		pushd '..' >/dev/null
-	done
-	[[ -e .git ]] && pwd
-}
-
-if REPO=$(find_repo); then
-	echo -e "Installing hooks to:\t$REPO"
-else 
-	echo "Not in a git repository" && exit 1
-fi
-
+# Find where this script is being called from
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
 DIR=$( cd -P "$( dirname "$SOURCE" )" && pwd )
 GITTOOLS=$(cd -P "$DIR/../.." && pwd)
 
+# Confirm that we're in a git repo
+if REPO=$($GITTOOLS/shell/in-git.sh); then
+    echo -e "Installing hooks to:\t$REPO"
+else 
+    echo "Not in a git repository" && exit 1
+fi
+
 if CONFIG_GITTOOLS=$(git config --get zynga.gittools.path) || 
     { [[ -e $REPO/gittools ]] && CONFIG_GITTOOLS=$REPO/gittools; } then
     if [[ $(cd $CONFIG_GITTOOLS && pwd) != $(cd $GITTOOLS && pwd) ]]; then
-	echo "Installing from \"$GITTOOLS\", but configured to use gittools at \"CONFIG_GITTOOLS\""
-	echo -n "Continue? (Y/n) "
+	echo "Installing from \"$GITTOOLS\", but configured to use gittools at \"$CONFIG_GITTOOLS\". Continue? (Y/n) "
 	read ANSWER
 	if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
 	    echo "Consider updating git config option: zynga.gittools.path"
@@ -62,10 +56,10 @@ else
     fi
 fi
 
-# Where will we look for our custom hook scripts to be enabled
+# Where will we look for our custom hook scripts to enable?
 [[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
 
-
+# 
 fifo_src=$(mktemp -u)
 fifo_dest=$(mktemp -u)
 mkfifo $fifo_src
