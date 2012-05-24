@@ -5,7 +5,7 @@
 #   ps1-git: Generates a prompt string summarizing the state of the current git repo.
 #
 # Example (in .bashrc):
-# . ~/devtools/workflow/ps1-git.sh
+# . ps1-git.sh
 # export PS1='\n\u\[\e[1;37m\]@\[\e[1;36m\]\h:\[\e[1;33m\]\w$(ps1-git --lazy)\[\e[1;37m\]\n$\[\e[0m\] '
 
 # Display the current git branch status information
