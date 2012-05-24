@@ -21,57 +21,69 @@ function ps1-git() {
 
     # Quick check to see if we're in a git repository
     local GIT_DIR;
-    if ! GIT_DIR=$($DIR/in-git.sh)/.git; then
-	return
-    fi
-
-    # Create a 'last time updated' file if this is
-    # the first time we're in this directory
-    if [[ ! -e $GIT_DIR/.prompt_last ]]; then
-	touch --date="2 days ago" $GIT_DIR/.prompt_last
-    fi
-    
-    # Create file in the past to see if we've been here since then
-    touch --date="1 day ago" $GIT_DIR/.prompt_bounce
+    GIT_DIR=$($DIR/in-git.sh)/.git || return 0
 
     # If we haven't and "git status" is successful, do the complete examination
-    if ( [[ $GIT_DIR/.prompt_bounce -nt $GIT_DIR/.prompt_last ]] || # ( info is out of date or
-	    [[ "$1" != "--lazy" ]] ||				    #   we're forcing it or
-								    #   the last command was a successful git command ) and
+    if ( [[ ! -e $GIT_DIR/.prompt_last ]] || # ( first time in this repo ||
+	    [[ "$1" != "--lazy" ]] ||	     #   we're forcing it ||
+					     #   the last command was a successful git command )
 	    ( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) 
-	) && git status >/tmp/tmp.git_status 2>/dev/null; then			# we succesfully fetched and grabbed the current status
+	); then
 		
+	# Determine the current branch
+	local BRANCH=$(git branch | grep '^*' | sed 's/* //')
+	if [[ "$BRANCH" == "(no branch)" ]]; then
+	    local REFLOG=$(git reflog -n1)
+	    local REFHASH=${REFLOG%% *}
+	    local REFNAME=${REFLOG##* }
+	    if [[ ${REFNAME:0:${#REFHASH}} == ${REFHASH} ]]; then
+		BRANCH="(headless on ${REFHASH})"
+	    else
+		BRANCH="(headless on ${REFNAME})"
+	    fi
+	fi
+
+	# Determine our upstream branch
+	local UPSTREAM=
+	UPSTREAM=$(git rev-parse --abbrev-ref @{u} 2>/dev/null) || UPSTREAM=
+
         # Collect our statii in this empty array
 	local STATII=();
-	cat /tmp/tmp.git_status | grep "# Untracked files:" >/dev/null && STATII=( "${STATII[*]}" "new" )
-	cat /tmp/tmp.git_status | grep "# Changes not staged for commit:" >/dev/null && STATII=( "${STATII[*]}" "edits" )
-	cat /tmp/tmp.git_status | grep "# Changes to be committed:" >/dev/null && STATII=( "${STATII[*]}" "staged" )
+
+	local NEW=$(git ls-files -o --exclude-standard | wc -l)
+	[[ $NEW != 0 ]] && STATII=( "${STATII[*]}" "$NEW-new" )
+
+	local EDITS=$(git ls-files -dm | wc -l)
+	[[ $EDITS != 0 ]] && STATII=( "${STATII[*]}" "$EDITS-edits" )
 	
-	if cat /tmp/tmp.git_status | grep "# Your branch is behind" >/dev/null; then
-	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is behind" | sed 's/.*by \([0-9]\+\) commit.*/\1v/' ) )
+	local STAGED=$(git diff --name-only --cached | wc -l)
+	[[ $STAGED != 0 ]] && STATII=( "${STATII[*]}" "$STAGED-staged" )
+	
+        # Alternate, disabled view of outstanding changes
+	# STATII=( "$NEW/$EDITS/$STAGED" )
+
+	if [[ -n $UPSTREAM && -n $BRANCH ]] && echo $BRANCH | grep -vq '(.*)'; then
+	    local BEHIND=$(git rev-list ^$BRANCH $UPSTREAM | wc -l)
+	    local AHEAD=$(git rev-list $BRANCH ^$UPSTREAM | wc -l)
+
+	    [[ $BEHIND != 0 ]] && STATII=( "${STATII[*]}" "${BEHIND}v" )
+	    [[ $AHEAD != 0 ]] && STATII=( "${STATII[*]}" "${AHEAD}^" )
 	fi
-	
-	if cat /tmp/tmp.git_status | grep "# Your branch is ahead" >/dev/null; then
-	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# Your branch is ahead" | sed 's/.*by \([0-9]\+\) commit.*/\1^/' ) )
-	fi
-	
-	if cat /tmp/tmp.git_status | grep "# Your branch.*have diverged" >/dev/null; then
-	    STATII=( "${STATII[*]}" $(cat /tmp/tmp.git_status | grep "# and have " | sed 's/.*\s\([0-9]\+\)\s.*\s\([0-9]\+\).*/\1^ \2v/') )
-	fi
-	
+
 	# Reduce the array to a string
 	STATII=$(echo -n ${STATII[*]})
 	
-	# Determine the branch we're on and how to display it
-	local BRANCH=$(cat /tmp/tmp.git_status | grep "^# On branch" | sed -e "s/^# On branch //")
-	if [[ $BRANCH != master ]]; then
-	    BRANCH=$(echo "[$BRANCH]")
+	local BRANCHES=
+	if [[ -z $BRANCH ]]; then
+	    BRANCHES="[master]"
+	elif [[ -z $UPSTREAM ]]; then
+	    BRANCHES="[$BRANCH]"
 	else
-	    BRANCH=;
+	    BRANCHES="[$BRANCH->$UPSTREAM]"
 	fi
 	
 	# Write the prompt string to cache file
-	echo " ${BRANCH}(${STATII})" > $GIT_DIR/.prompt_last
+	echo " ${BRANCHES}(${STATII})" > $GIT_DIR/.prompt_last
 	    
 	# Color code to white to let us know this is a fresh status
 	echo -en "\e[1;37m"
