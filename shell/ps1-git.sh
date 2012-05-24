@@ -95,5 +95,4 @@ function ps1-git() {
     cat $GIT_DIR/.prompt_last
 }
 
-ps1-git
-
+ps1-git >/dev/null
