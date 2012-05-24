@@ -6,7 +6,7 @@
 #
 # Example (in .bashrc):
 # . ~/devtools/workflow/ps1-git.sh
-# export PS1="\n\u\[\e[1;37m\]@\[\e[0;33m\]\h:\[\e[1;34m\]\w\$(ps1_git --lazy)\[\e[1;37m\]\n\$\[\e[0m\] "
+# export PS1='\n\u\[\e[1;37m\]@\[\e[1;36m\]\h:\[\e[1;33m\]\w$(ps1-git --lazy)\[\e[1;37m\]\n$\[\e[0m\] '
 
 # Display the current git branch status information
 function ps1-git() {
