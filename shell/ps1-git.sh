@@ -2,7 +2,6 @@
 # Source from .bashrc
 #
 # Provides:
-#   in_git: Succeeds and prints repo path if current working directory is within a git repo.
 #   ps1-git: Generates a prompt string summarizing the state of the current git repo.
 #
 # Example (in .bashrc):
@@ -50,10 +49,10 @@ function ps1-git() {
         # Collect our statii in this empty array
 	local STATII=();
 
-	local NEW=$(git ls-files -o --exclude-standard | wc -l)
+	local NEW=$(git ls-files -o --exclude-standard $GIT_DIR/.. | wc -l)
 	[[ $NEW != 0 ]] && STATII=( "${STATII[*]}" "$NEW-new" )
 
-	local EDITS=$(git ls-files -dm | wc -l)
+	local EDITS=$(git ls-files -dm $GIT_DIR/.. | wc -l)
 	[[ $EDITS != 0 ]] && STATII=( "${STATII[*]}" "$EDITS-edits" )
 	
 	local STAGED=$(git diff --name-only --cached | wc -l)
