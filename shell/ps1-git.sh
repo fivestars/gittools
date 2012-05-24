@@ -28,18 +28,19 @@ function ps1-git() {
     # Create a 'last time updated' file if this is
     # the first time we're in this directory
     if [[ ! -e $GIT_DIR/.prompt_last ]]; then
-	touch $GIT_DIR/.prompt_last
+	touch --date="2 days ago" $GIT_DIR/.prompt_last
     fi
     
     # Create file in the past to see if we've been here since then
     touch --date="1 day ago" $GIT_DIR/.prompt_bounce
+
     # If we haven't and "git status" is successful, do the complete examination
     if ( [[ $GIT_DIR/.prompt_bounce -nt $GIT_DIR/.prompt_last ]] || # ( info is out of date or
 	    [[ "$1" != "--lazy" ]] ||				    #   we're forcing it or
 								    #   the last command was a successful git command ) and
 	    ( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) 
-	) && git fetch 2>/dev/null && git status >/tmp/tmp.git_status 2>/dev/null; then			# we succesfully fetched and grabbed the current status
-	
+	) && git status >/tmp/tmp.git_status 2>/dev/null; then			# we succesfully fetched and grabbed the current status
+		
         # Collect our statii in this empty array
 	local STATII=();
 	cat /tmp/tmp.git_status | grep "# Untracked files:" >/dev/null && STATII=( "${STATII[*]}" "new" )
