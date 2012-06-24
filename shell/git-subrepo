@@ -1,0 +1,186 @@
+#! /bin/bash
+
+function _help() {
+    echo "usage: git subrepo [list]"
+    echo "   or: git subrepo add <dir> <remote> [<branch>|<hash>]"
+    echo "   or: git subrepo rm [-r] <dir>"
+    echo "   or: git subrepo update [<dir>]"
+    echo "   or: git subrepo checkout <dir> [<branch>|<hash>]"
+    echo "   or: git subrepo help"
+}
+
+function _add() {
+    DIR=$1
+    REMOTE=$2
+    REF=${3:-master}
+    
+    if grep -q "^$DIR " .gitrepos; then
+	echo "subrepo already exists as "$(grep "^$DIR " .gitrepos) >&2
+	exit 1
+    elif [[ -e $DIR ]]; then
+	echo "$DIR is already present. Move aside or choose another location for your subrepo." >&2
+	exit 1
+    fi
+
+    if git clone -b $REF $REMOTE $DIR; then
+	echo $DIR $REMOTE $REF >> .gitrepos
+    fi
+}
+
+function _rm() {
+    local OPTARG OPTIND OPTERR OPT DELETE
+    while getopts ":r" OPT; do
+	case $OPT in
+	    r) DELETE=1;;
+	esac
+    done
+    shift $((OPTIND-1))
+
+    DIR=$1
+    if grep -q "^$DIR " .gitrepos; then
+	if [[ -n $DELETE ]]; then
+	    echo "Removing subrepo record and directory"
+	    rm -rf $DIR
+	else
+	    echo "Removing subrepo record, leaving directory"
+	fi
+	sed -i'' "/^$DIR /d" .gitrepos
+    else
+	echo "Unknown subrepo" >&2
+    fi
+}
+
+function _update {
+    local OPTARG OPTIND OPTERR OPT DELETE
+    while getopts ":" OPT; do
+	case $OPT in
+	esac
+    done
+    shift $((OPTIND-1))
+
+    local REPO DIR REMOTE REF HASH
+    if [[ $# > 0 ]]; then
+	REPO=$1
+    fi
+
+    while read LINE; do
+	DIR=$(echo $LINE | cut -d' ' -f1)
+	REMOTE=$(echo $LINE | cut -d' ' -f2)
+	REF=$(echo $LINE | cut -d' ' -f3)
+	if [[ ${REF:0:1} == "!!" ]]; then
+	    HASH=1
+	    REF=${REF:1}
+	fi
+
+	if [[ ! -e $DIR ]]; then
+	    echo -e "\033[1;37;42m $DIR($REF) -- $REMOTE \033[0m"
+	    if [[ -z $HASH ]]; then
+		if ! git clone -b $REF $REMOTE $DIR; then
+		    echo "Failed to clone subrepo" >&2
+		    exit
+		fi
+	    else
+		if ! git clone $REMOTE $DIR; then
+		    echo "Failed to clone subrepo" >&2
+		    exit
+		fi
+		cd $DIR
+		if ! git checkout $REF; then
+		    echo "Failed to checkout $REF" >&2
+		    exit
+		fi
+	    fi
+	    echo
+	else
+	    pushd $DIR &>/dev/null
+	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
+		echo -e "\033[1;37;41m $DIR($REF) -- $REMOTE \033[0m"
+		echo "Remote has changed for this subrepo. You must manually remove this directory before updating can proceed." >&2
+		exit 1
+	    fi
+
+	    echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
+	    if ! ( git fetch && git checkout $REF ); then
+		echo "Failed to checkout $REF" >&2
+		exit 1
+	    fi
+	    
+	    if [[ -z $HASH ]] && ! git pull; then
+		echo "Failed to merge changes from $REF. Resolve these issues and update again" >&2
+		exit 1
+	    fi
+	    echo
+	    popd &>/dev/null
+	fi
+
+    done < <(grep "^$REPO" .gitrepos)
+}
+
+function _checkout {
+    local DIR=$1 REF=$2 REMOTE LINE 
+
+    if ! LINE=$(grep "^$DIR " .gitrepos); then
+	echo "Unknown subrepo" >&2
+    elif [[ ! -e $DIR ]]; then
+	echo "Could not find subrepo at $DIR" >&2
+    else
+	REMOTE=$(echo $LINE | cut -d' ' -f2)
+	pushd $DIR &>/dev/null
+	echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
+	if git checkout $REF; then
+	    if git branch | grep -q "(no branch)"; then
+		REF="!!$REF"
+	    fi
+	    popd &>/dev/null
+
+	    REMOTE=$(echo $REMOTE | sed "s/\//\\\\\//g")
+	    sed -i "s/^$DIR .*/$DIR $REMOTE $REF/" .gitrepos
+	else
+	    popd &>/dev/null
+	fi
+	echo
+    fi
+}
+
+function _list {
+    local DIR REMOTE REF CREF REF_ERR_BEGIN REM_ERR_BEGIN ERR_END="\033[0m"
+    local FORMAT="%-20s %b%-12s %-12s%b %b%s%b\n"
+    printf "$FORMAT" "Path" "$REF_ERR_BEGIN" "Subrepo Ref" "Current Ref" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
+    echo "----------------------------------------------------------------------------"
+    while read LINE; do
+	DIR=$(echo $LINE | cut -d' ' -f1)
+	REMOTE=$(echo $LINE | cut -d' ' -f2)
+	REF=$(echo $LINE | cut -d' ' -f3)
+	if [[ ! -e $DIR ]]; then
+	    CREF="(not present)"
+	    REF_ERR_BEGIN="\033[1;37;41m"
+	    REM_ERR_BEGIN=
+	else
+	    pushd $DIR &>/dev/null
+	    
+	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
+	    if [[ "$BRANCH" == "(no branch)" ]]; then
+		local REFLOG=$(git reflog -n1)
+		CREF=${REFLOG%% *}
+	    else
+		CREF=$BRANCH
+	    fi
+	    
+	    [[ $REF == $CREF ]] && REF_ERR_BEGIN= || REF_ERR_BEGIN="\033[1;37;41m"
+	    git remote -v | grep -q "origin[[:space:]]\+$REMOTE" && REM_ERR_BEGIN= || REM_ERR_BEGIN="\033[1;37;41m"
+	    
+	    popd &>/dev/null
+	fi
+
+	printf "$FORMAT" "$DIR" "$REF_ERR_BEGIN" "$REF" "$CREF" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
+    done < .gitrepos
+}
+
+
+touch .gitrepos
+COMMAND=$1
+case $COMMAND in
+     add|rm|update|checkout|help) shift; _$COMMAND "${@}" ;;
+     list|'') _list;;
+     *) echo "Unknown subrepo command" >&2; exit 1;;
+esac
