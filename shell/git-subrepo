@@ -1,25 +1,129 @@
 #! /bin/bash
 
 function _help() {
-    echo "usage: git subrepo [list]"
-    echo "   or: git subrepo add <dir> <remote> [<branch>|<hash>]"
-    echo "   or: git subrepo rm [-r] <dir>"
-    echo "   or: git subrepo update [<dir>]"
-    echo "   or: git subrepo checkout <dir> [<branch>|<hash>]"
-    echo "   or: git subrepo help"
+    echo "\
+Usage: git subrepo [list]
+    or: git subrepo install [--local] [--global] [--core]
+    or: git subrepo uninstall [--local] [--global] [--core]
+    or: git subrepo add <dir> <remote> [<branch>|<hash>]
+    or: git subrepo rm [-r] <dir>
+    or: git subrepo update [--top] [--rebase] [<dir>]
+    or: git subrepo checkout <dir> [<branch>|<hash>]
+    or: git subrepo help
+
+Operations:
+    list: Lists the current subrepos for this repository.
+
+    install: Installs 'git-subrepo' into any of three locations.
+             --local: The repository's aliases (default)
+             --global: Your global aliases
+             --core: Copies this file into this machine's git core directory.
+                     Any 'subrepo' aliases will no longer be effective.
+
+    uninstall: Undoes the effects of 'install'.
+
+    add: Adds a new repository as a sub repo. This will create an
+         entry in the .gitrepos file and clone the repository
+         to <dir>. If <branch> or <hash> is given, the repository
+         will be checked out to that ref-spec.
+
+    rm: Removes a sub repo from this repository. This removes the
+        sub repo's entry from the .gitrepos file. If the -r option
+        is given, the sub repo's directory will be removed from
+        the working directory as well.
+
+    update: Clones any new repositories found in the .gitrepos file
+            and pulls in any changes in existing sub repos. 
+            --top: Perform a pull on this top-level repo first.
+            --rebase: Perform a rebase rather than a merge wher
+                      pulling commits from the sub repos' origins.
+            
+    checkout: Switches a sub repo's ref-spec. This will update the
+              sub repo's entry in the .gitrepos file as well.
+
+    help: Displays this help message.
+"
+}
+
+function _install {
+    local TOKENS LOCAL GLOBAL CORE CHOICE 
+    [[ -z $@ ]] && LOCAL=2
+    read -a TOKENS <<< "$@"
+    for TOKEN in ${TOKENS[@]}; do
+	case $TOKEN in
+	    --local) LOCAL=1;;
+	    --global) [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
+	    --core) [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+	    *) echo "Unknown option: $TOKEN"; return 1;; 
+	esac
+    done
+    
+    if [[ -n $LOCAL ]]; then
+	git config alias.subrepo '!$(git rev-parse --show-toplevel)/git-subrepo' && \
+	    echo "Added to your repository's aliases."
+    fi
+
+    if [[ -n $GLOBAL ]]; then
+	git config --global alias.subrepo "!$(git rev-parse --show-toplevel)/git-subrepo" && \
+	    echo "Added to your global aliases."
+    fi
+
+    if [[ -n $CORE ]]; then
+	echo "This will supercede any subrepo aliases on this machine."
+	echo -n "Continue? (y/N) "
+	read CHOICE
+	case $CHOICE in
+	    y|Y) cp $BASH_SOURCE $(git --exec-path) && \
+		echo "Copied to $(git --exec-path)/git-subrepo" || \
+		echo "Could not copy to $(git --exec-path)/git-subrepo";;
+	esac
+    fi
+}
+
+function _uninstall {
+    local TOKENS LOCAL GLOBAL CORE CHOICE
+    [[ -z $@ ]] && LOCAL=2
+    read -a TOKENS <<< "$@"
+    for TOKEN in ${TOKENS[@]}; do
+	case $TOKEN in
+	    --local) LOCAL=1;;
+	    --global) [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
+	    --core) [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+	esac
+    done
+    
+    if [[ -n $LOCAL ]]; then
+	git config --unset alias.subrepo && \
+	    echo "Removed from your repository's aliases."
+    fi
+
+    if [[ -n $GLOBAL ]]; then
+	git config --global --unset alias.subrepo && \
+	    echo "Removed from your global aliases."
+	
+    fi
+
+    if [[ -n $CORE && -e "$(git --exec-path)/git-subrepo" ]]; then
+	echo "This will remove 'git subrepo' from this machine."
+	echo -n "Continue? (y/N) "
+	read CHOICE
+	case $CHOICE in
+	    y|Y) rm -f "$(git --exec-path)/git-subrepo" && \
+		echo "Deleted $(git --exec-path)/git-subrepo" || \
+		echo "Could not remove from $(git --exec-path)";;
+	esac
+    fi
 }
 
 function _add() {
-    DIR=$1
-    REMOTE=$2
-    REF=${3:-master}
+    local DIR=$1 REMOTE=$2 REF=${3:-master}
     
     if grep -q "^$DIR " .gitrepos; then
 	echo "subrepo already exists as "$(grep "^$DIR " .gitrepos) >&2
-	exit 1
+	return 1
     elif [[ -e $DIR ]]; then
 	echo "$DIR is already present. Move aside or choose another location for your subrepo." >&2
-	exit 1
+	return 1
     fi
 
     if git clone -b $REF $REMOTE $DIR; then
@@ -28,7 +132,7 @@ function _add() {
 }
 
 function _rm() {
-    local OPTARG OPTIND OPTERR OPT DELETE
+    local OPTARG OPTIND OPTERR OPT DELETE DIR
     while getopts ":r" OPT; do
 	case $OPT in
 	    r) DELETE=1;;
@@ -51,17 +155,20 @@ function _rm() {
 }
 
 function _update {
-    local OPTARG OPTIND OPTERR OPT DELETE
-    while getopts ":" OPT; do
-	case $OPT in
-	esac
-    done
-    shift $((OPTIND-1))
-
-    local REPO DIR REMOTE REF HASH
+    local DELETE REPO DIR REMOTE REF CREF HASH REBASE LINE CHOICE
     if [[ $# > 0 ]]; then
 	REPO=$1
     fi
+
+    local TOKENS
+    read -a TOKENS <<< "${@}"
+    for TOKEN in ${TOKENS[@]}; do
+	case $TOKEN in
+	    --rebase) REBASE=$TOKEN;;
+	esac
+    done
+
+    exec 10<&0
 
     while read LINE; do
 	DIR=$(echo $LINE | cut -d' ' -f1)
@@ -77,17 +184,17 @@ function _update {
 	    if [[ -z $HASH ]]; then
 		if ! git clone -b $REF $REMOTE $DIR; then
 		    echo "Failed to clone subrepo" >&2
-		    exit
+		    return 1
 		fi
 	    else
 		if ! git clone $REMOTE $DIR; then
 		    echo "Failed to clone subrepo" >&2
-		    exit
+		    return 1
 		fi
 		cd $DIR
 		if ! git checkout $REF; then
 		    echo "Failed to checkout $REF" >&2
-		    exit
+		    return 1
 		fi
 	    fi
 	    echo
@@ -96,18 +203,45 @@ function _update {
 	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
 		echo -e "\033[1;37;41m $DIR($REF) -- $REMOTE \033[0m"
 		echo "Remote has changed for this subrepo. You must manually remove this directory before updating can proceed." >&2
-		exit 1
+		return 1
 	    fi
 
-	    echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
-	    if ! ( git fetch && git checkout $REF ); then
-		echo "Failed to checkout $REF" >&2
-		exit 1
+	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
+	    if [[ "$BRANCH" == "(no branch)" ]]; then
+		local REFLOG=$(git reflog -n1)
+		CREF=${REFLOG%% *}
+	    else
+		CREF=$BRANCH
 	    fi
 	    
-	    if [[ -z $HASH ]] && ! git pull; then
+	    if [[ $CREF != $REF ]]; then
+		echo -e "\033[1;37;41m $DIR($CREF) -- $REMOTE \033[0m"
+		echo "Your current branch does not match the specified subrepo branch: $REF"
+		echo "What would you like to do?"
+		echo " k) keep the current branch (default)"
+		echo " s) switch to the subrepo branch (will replace the current branch with the subrepo branch)"
+		echo " c) checkout the current branch (will set the current branch as the subrepo branch)"
+		read -u 10 CHOICE
+
+		[[ -n $CHOICE ]] || CHOICE=k
+		case $CHOICE in
+		    k) continue;;
+		    s) ;;
+		    c) _checkout "$DIR" "$CREF";;
+		    *) echo "Invalid choice: $CHOICE. Stopping."; return 1;;
+		esac
+	    else
+		echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
+	    fi
+	    
+	    if ! ( git fetch && git checkout $REF ); then
+		echo "Failed to checkout $REF" >&2
+		return 1
+	    fi
+	    
+	    if [[ -z $HASH ]] && ! git pull $REBASE; then
 		echo "Failed to merge changes from $REF. Resolve these issues and update again" >&2
-		exit 1
+		return 1
 	    fi
 	    echo
 	    popd &>/dev/null
@@ -176,11 +310,17 @@ function _list {
     done < .gitrepos
 }
 
+# Move to the top-level git dir
+cd $(git rev-parse --show-toplevel)
 
-touch .gitrepos
 COMMAND=$1
 case $COMMAND in
-     add|rm|update|checkout|help) shift; _$COMMAND "${@}" ;;
-     list|'') _list;;
+     '') COMMAND=list ;&
+     rm|update|checkout) 
+         if [[ ! -e .gitrepos ]]; then
+	     echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&2
+	     exit 1
+	 fi ;&
+     help|install|uninstall) shift; _$COMMAND "${@}" ;;
      *) echo "Unknown subrepo command" >&2; exit 1;;
 esac
