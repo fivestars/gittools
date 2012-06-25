@@ -14,17 +14,16 @@ function ps1-git() {
     # Record the state of the last command-line command
     RESULT=$?
 
-    local LAZY=
-    local SHORT=
-
-    local OPTIND=
-    local OPTARG=
-    local OPTERR=
-    local OPT=
-    while getopts :ls: OPT; do
+    local LAZY SHORT BEFORE='\e[1;37m' BEFORE_STALE='\e[0;37m' AFTER= AFTER_STALE= STALE= GIT_DIR
+    local OPTIND OPTARG OPTERR OPT
+    while getopts :ls:c:b:B:a:A: OPT; do
 	case $OPT in
 	    l) LAZY=1;;
 	    s) SHORT=$OPTARG;;
+	    b) BEFORE=$OPTARG;;
+	    B) BEFORE_STALE=$OPTARG;;
+	    b) AFTER=$OPTARG;;
+	    B) AFTER_STALE=$OPTARG;;
 	    ?) case $OPTARG in
 		s) SHORT='|';;
                esac;;
@@ -32,12 +31,7 @@ function ps1-git() {
     done
     shift $((OPTIND - 1))
 
-    # Quick check to see if we're in a git repository
-    local SOURCE="${BASH_SOURCE[0]}"
-    while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
-    local DIR=$( builtin cd -P "$( dirname "$SOURCE" )" && pwd )
-    local GIT_DIR=
-    GIT_DIR=$($DIR/in-git.sh)/.git || return 0
+    GIT_DIR=$(git rev-parse --show-toplevel 2>/dev/null)/.git || return 0
 
     # Only do the work under certain conditions. It's cached for later
     if ( [[ ! -e $GIT_DIR/.prompt_last ]] || # ( first time in this repo ||
@@ -45,7 +39,7 @@ function ps1-git() {
 					     #   the last command was a successful git command )
 	    ( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) 
 	); then
-		
+
 	# Determine the current branch
 	local BRANCH=$(git branch | grep '^*' | sed 's/* //')
 	if [[ "$BRANCH" == "(no branch)" ]]; then
@@ -53,9 +47,9 @@ function ps1-git() {
 	    local REFHASH=${REFLOG%% *}
 	    local REFNAME=${REFLOG##* }
 	    if [[ ${REFNAME:0:${#REFHASH}} == ${REFHASH} ]]; then
-		BRANCH="(headless on ${REFHASH})"
+		BRANCH="(detached from ${REFHASH})"
 	    else
-		BRANCH="(headless on ${REFNAME})"
+		BRANCH="(detached from ${REFNAME})"
 	    fi
 	fi
 
@@ -106,14 +100,21 @@ function ps1-git() {
 	echo "${BRANCHES}(${STATII})" > $GIT_DIR/.prompt_last
 	    
 	# Color code to white to let us know this is a fresh status
-	echo -en '\e[1;37m'
-    else		
+	echo -en ${BEFORE}
+	# '\e[1;37m'
+    else
+	# We're going to display a stale status
+	STALE=1
+
         # We'll be displaying a stale status in gray
-	echo -en '\e[0;37m'
+	echo -en ${BEFORE_STALE}
+	#'\e[0;37m'
     fi
 
     # Display the most recently generated status
     cat $GIT_DIR/.prompt_last
+
+    [[ -z ${STALE} ]] && echo -en ${AFTER} || echo -en ${AFTER_STALE}
 }
 
 ps1-git $@ >/dev/null
