@@ -7,7 +7,7 @@ Usage: git subrepo [list]
     or: git subrepo uninstall [--local] [--global] [--core]
     or: git subrepo add <dir> <remote> [<branch>|<hash>]
     or: git subrepo rm [-r] <dir>
-    or: git subrepo update [--top] [--rebase] [<dir>]
+    or: git subrepo update [--top] [--rebase] [<dir1>] [<dir2>] ...
     or: git subrepo checkout <dir> [<branch>|<hash>]
     or: git subrepo help
 
@@ -46,14 +46,14 @@ Operations:
 }
 
 function _install {
-    local TOKENS LOCAL GLOBAL CORE CHOICE 
+    local TOKENS TOKEN LOCAL GLOBAL CORE CHOICE 
     [[ -z $@ ]] && LOCAL=2
     read -a TOKENS <<< "$@"
     for TOKEN in ${TOKENS[@]}; do
 	case $TOKEN in
-	    --local) LOCAL=1;;
-	    --global) [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
-	    --core) [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+	    --local) shift; LOCAL=1;;
+	    --global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
+	    --core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
 	    *) echo "Unknown option: $TOKEN"; return 1;; 
 	esac
     done
@@ -81,14 +81,14 @@ function _install {
 }
 
 function _uninstall {
-    local TOKENS LOCAL GLOBAL CORE CHOICE
+    local TOKENS TOKEN LOCAL GLOBAL CORE CHOICE
     [[ -z $@ ]] && LOCAL=2
     read -a TOKENS <<< "$@"
     for TOKEN in ${TOKENS[@]}; do
 	case $TOKEN in
-	    --local) LOCAL=1;;
-	    --global) [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
-	    --core) [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+	    --local) shift; LOCAL=1;;
+	    --global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
+	    --core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
 	esac
     done
     
@@ -155,57 +155,77 @@ function _rm() {
 }
 
 function _update {
-    local DELETE REPO DIR REMOTE REF CREF HASH REBASE LINE CHOICE
-    if [[ $# > 0 ]]; then
-	REPO=$1
-    fi
+    local DELETE REPOS REPO DIR REMOTE REF CREF HASH TOP REBASE LINE CHOICE
 
-    local TOKENS
-    read -a TOKENS <<< "${@}"
+    local TOKENS TOKEN
+    read -a TOKENS <<< "$@"
     for TOKEN in ${TOKENS[@]}; do
 	case $TOKEN in
-	    --rebase) REBASE=$TOKEN;;
+	    --rebase) shift; REBASE=$TOKEN;;
+	    --top) shift; TOP=1;;
+	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN"; return 1;;
 	esac
     done
+    REPOS="$@"
 
+    # Update the top-level repository, if requested
+    if [[ -n $TOP ]]; then
+	if ! git pull $REBASE; then
+	    exit 1
+	fi
+    fi
+
+    # We need to save a reference to the outer stdin here since 
+    # we want to read from the keyboard for user input and the 
+    # while loop will have its own stdin for reading the .gitrepos
+    # file.
     exec 10<&0
 
     while read LINE; do
-	DIR=$(echo $LINE | cut -d' ' -f1)
-	REMOTE=$(echo $LINE | cut -d' ' -f2)
-	REF=$(echo $LINE | cut -d' ' -f3)
-	if [[ ${REF:0:1} == "!!" ]]; then
+	read DIR REMOTE REF <<< $(echo $LINE)
+
+	# See if the sub repo is pinned to a particular hash.
+	if [[ ${REF:0:2} == "!!" ]]; then
 	    HASH=1
-	    REF=${REF:1}
+	    REF=${REF:2}
 	fi
 
+	# If the sub repo directory doesn't exist, we must clone it down
 	if [[ ! -e $DIR ]]; then
 	    echo -e "\033[1;37;42m $DIR($REF) -- $REMOTE \033[0m"
 	    if [[ -z $HASH ]]; then
+	        # If it's not a hash, we should be able to clone it
+	        # with the branch already checked out.
 		if ! git clone -b $REF $REMOTE $DIR; then
 		    echo "Failed to clone subrepo" >&2
 		    return 1
 		fi
 	    else
+		# Otherwise, we'll clone it normally, then checkout the hash.
 		if ! git clone $REMOTE $DIR; then
 		    echo "Failed to clone subrepo" >&2
 		    return 1
 		fi
-		cd $DIR
+		pushd $DIR &>/dev/null
 		if ! git checkout $REF; then
 		    echo "Failed to checkout $REF" >&2
 		    return 1
 		fi
+		popd &>/dev/null
 	    fi
 	    echo
 	else
+	    # The sub repo directory is already present. Navigate to it.
 	    pushd $DIR &>/dev/null
+
+	    # If we detect that the sub repo's remote has changed, force a manual intervention.
 	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
 		echo -e "\033[1;37;41m $DIR($REF) -- $REMOTE \033[0m"
 		echo "Remote has changed for this subrepo. You must manually remove this directory before updating can proceed." >&2
 		return 1
 	    fi
 
+	    # Determine the currently checked out branch of the sub repo.
 	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
 	    if [[ "$BRANCH" == "(no branch)" ]]; then
 		local REFLOG=$(git reflog -n1)
@@ -213,7 +233,8 @@ function _update {
 	    else
 		CREF=$BRANCH
 	    fi
-	    
+
+	    # If they differ, ask how we're expected to handle it.
 	    if [[ $CREF != $REF ]]; then
 		echo -e "\033[1;37;41m $DIR($CREF) -- $REMOTE \033[0m"
 		echo "Your current branch does not match the specified subrepo branch: $REF"
@@ -228,13 +249,13 @@ function _update {
 		    k) continue;;
 		    s) ;;
 		    c) _checkout "$DIR" "$CREF";;
-		    *) echo "Invalid choice: $CHOICE. Stopping."; return 1;;
+		    *) echo "Invalid choice: $CHOICE. Stopping." >&2; return 1;;
 		esac
 	    else
 		echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
 	    fi
 	    
-	    if ! ( git fetch && git checkout $REF ); then
+	    if ! { git fetch && git checkout $REF; }; then
 		echo "Failed to checkout $REF" >&2
 		return 1
 	    fi
@@ -247,7 +268,14 @@ function _update {
 	    popd &>/dev/null
 	fi
 
-    done < <(grep "^$REPO" .gitrepos)
+    done < <(
+	if [[ -n $REPOS ]]; then
+	    for REPO in ${REPOS[@]}; do 
+		grep "^$REPO " .gitrepos
+	    done
+        else
+	    cat .gitrepos
+	fi)
 }
 
 function _checkout {
@@ -282,9 +310,7 @@ function _list {
     printf "$FORMAT" "Path" "$REF_ERR_BEGIN" "Subrepo Ref" "Current Ref" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
     echo "----------------------------------------------------------------------------"
     while read LINE; do
-	DIR=$(echo $LINE | cut -d' ' -f1)
-	REMOTE=$(echo $LINE | cut -d' ' -f2)
-	REF=$(echo $LINE | cut -d' ' -f3)
+	read DIR REMOTE REF <<< $(echo $LINE)
 	if [[ ! -e $DIR ]]; then
 	    CREF="(not present)"
 	    REF_ERR_BEGIN="\033[1;37;41m"
@@ -305,7 +331,7 @@ function _list {
 	    
 	    popd &>/dev/null
 	fi
-
+	
 	printf "$FORMAT" "$DIR" "$REF_ERR_BEGIN" "$REF" "$CREF" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
     done < .gitrepos
 }
@@ -315,12 +341,17 @@ cd $(git rev-parse --show-toplevel)
 
 COMMAND=$1
 case $COMMAND in
-     '') COMMAND=list ;&
-     rm|update|checkout) 
-         if [[ ! -e .gitrepos ]]; then
-	     echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&2
-	     exit 1
-	 fi ;&
-     help|install|uninstall) shift; _$COMMAND "${@}" ;;
-     *) echo "Unknown subrepo command" >&2; exit 1;;
+    # Default to 'list'
+    '') COMMAND=list ;&
+
+    # Require a .gitrepos file for these commands
+    rm|update|checkout) 
+        if [[ ! -e .gitrepos ]]; then
+	    echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&2
+	    exit 1
+	fi ;&
+
+    # These do not require a .gitrepos file
+    help|install|uninstall) shift; _$COMMAND "${@}" ;;
+    *) echo "Unknown subrepo command" >&2; exit 1;;
 esac
