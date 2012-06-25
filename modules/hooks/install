@@ -166,3 +166,4 @@ enable_hooks $SRC
 echo -e "\nYou can enable/disable custom hooks now by modifying your git config:"
 echo "    git config -l | grep zynga.gittools.hooks"
 echo "    git config --add zynga.gittools.hooks.<hook name> <hook script>"
+echo "    git config --unset zynga.gittools.hooks.<hook name> <hook script>"
