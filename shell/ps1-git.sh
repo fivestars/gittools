@@ -31,9 +31,13 @@ function ps1-git() {
     done
     shift $((OPTIND - 1))
 
-    GIT_DIR=$(git rev-parse --show-toplevel 2>/dev/null)/.git || return 0
 
-    # Only do the work under certain conditions. It's cached for later
+    if [[ $(git rev-parse --is-inside-git-dir 2>/dev/null) != false ]] || \
+	! GIT_DIR=$(git rev-parse --git-dir); then
+	return 0
+    fi
+
+    # Only do the work under certain conditions. It's cached for later.
     if ( [[ ! -e $GIT_DIR/.prompt_last ]] || # ( first time in this repo ||
 	    [[ -z $LAZY ]] ||	             #   we're forcing it ||
 					     #   the last command was a successful git command )
