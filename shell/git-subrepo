@@ -35,7 +35,7 @@ Operations:
     update: Clones any new repositories found in the .gitrepos file
             and pulls in any changes in existing sub repos. 
             --top: Perform a pull on this top-level repo first.
-            --rebase: Perform a rebase rather than a merge wher
+            --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub repos' origins.
             
     checkout: Switches a sub repo's ref-spec. This will update the
