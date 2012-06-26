@@ -417,19 +417,22 @@ function _list {
 # Move to the top-level git dir
 cd $(git rev-parse --show-toplevel)
 
-COMMAND=$1
+COMMAND=${1:-list}
 case $COMMAND in
-    # Default to 'list'
-    '') COMMAND=list ;&
-
     # Require a .gitrepos file for these commands
-    rm|update|publish|checkout) 
+    list|rm|update|publish|checkout) shift
         if [[ ! -e .gitrepos ]]; then
-	    echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&2
-	    exit 1
-	fi ;&
+            echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&\2
+            exit 1
+        fi
+        _$COMMAND "${@}"
+        ;;
 
     # These do not require a .gitrepos file
-    add|help|install|uninstall) shift; _$COMMAND "${@}" ;;
-    *) echo "Unknown subrepo command" >&2; exit 1;;
+    add|help|install|uninstall) shift
+        _$COMMAND "${@}"
+        ;;
+    *)  echo "Unknown subrepo command '$COMMAND'" >&2
+        exit 1
+        ;;
 esac
