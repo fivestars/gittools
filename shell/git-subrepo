@@ -1,6 +1,6 @@
 #! /bin/bash
 
-function _help() {
+function _help {
     echo "\
 Usage: git subrepo [list]
     or: git subrepo install [--local] [--global] [--core]
@@ -8,6 +8,7 @@ Usage: git subrepo [list]
     or: git subrepo add <dir> <remote> [<branch>|<hash>]
     or: git subrepo rm [-r] <dir>
     or: git subrepo update [--top] [--rebase] [<dir1>] [<dir2>] ...
+    or: git subrepo publish [-m <message>] [-p]
     or: git subrepo checkout <dir> [<branch>|<hash>]
     or: git subrepo help
 
@@ -37,7 +38,16 @@ Operations:
             --top: Perform a pull on this top-level repo first.
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub repos' origins.
-            
+
+    publish: Iterates through the subrepo list in the .gitrepos file
+             and verifies that they are checked out locally and that
+             the specified refs(pins) are present in their remote 
+             repositories.
+             You are then prompted to continue with the add-commit-push
+             of the .gitrepos file. If the -p option is provided, the
+             prompt will be suppressed, and it will proceed as if you
+             had entered 'y'.             
+
     checkout: Switches a sub repo's ref-spec. This will update the
               sub repo's entry in the .gitrepos file as well.
 
@@ -115,7 +125,7 @@ function _uninstall {
     fi
 }
 
-function _add() {
+function _add {
     local DIR=$1 REMOTE=$2 REF=${3:-master}
     
     if grep -q "^$DIR " .gitrepos; then
@@ -131,7 +141,7 @@ function _add() {
     fi
 }
 
-function _rm() {
+function _rm {
     local OPTARG OPTIND OPTERR OPT DELETE DIR
     while getopts ":r" OPT; do
 	case $OPT in
@@ -276,6 +286,71 @@ function _update {
         else
 	    cat .gitrepos
 	fi)
+}
+
+function _publish {
+    local MESSAGE="Updating subrepos" PUSH
+
+    local OPTARG OPTIND OPTERR OPT CHOICE
+    while getopts ":m:p" OPT; do
+	case $OPT in
+	    m) MESSAGE="$OPTARG";;
+	    p) PUSH=1;;
+	esac
+    done
+    shift $((OPTIND-1))
+
+    if [[ $(git diff --name-only --cached | wc -l) != 0 ]]; then
+	echo "Staged changes found. Please commit or remove them before continuing" >&2
+	return 1
+    fi
+
+    local DIR REMOTE REF HASH
+    while read LINE; do
+	read DIR REMOTE REF <<< $(echo $LINE)
+	if [[ ! -e $DIR ]]; then
+	    echo "Subrepo directory does not exist locally. Try running 'git subrepo update' first." >&2
+	    return 1
+	fi
+
+	# See if the sub repo is pinned to a particular hash.
+	if [[ ${REF:0:2} == "!!" ]]; then
+	    HASH=1
+	    REF=${REF:2}
+	fi
+
+	pushd $DIR &>/dev/null
+
+	git fetch
+	if [[ -n $HASH ]]; then
+	    if ! git branch -r --contains $REF &>/dev/null; then
+		echo "$DIR reference $REF not pushed to $REMOTE yet" >&2
+		return 1
+	    fi
+	else 
+	    if ! git branch -r | grep "origin/$REF"; then
+		echo "$DIR branch $REF does not exist on $REMOTE yet" >&2
+		return 1
+	    fi
+	fi
+
+	popd &>/dev/null
+
+    done < .gitrepos
+
+    if [[ -z $PUSH ]]; then
+	echo -n "Ready to commit and push. Continue? (Y/n) "
+	read CHOICE
+	case $CHOICE in
+	    ''|y|Y) ;;
+	    *) echo "Aborting publish" >&2; return 1;;
+	esac
+    fi
+
+    # Let's do it.
+    git add .gitrepos
+    git commit -m "$MESSAGE"
+    git push
 }
 
 function _checkout {
