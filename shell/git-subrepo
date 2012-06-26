@@ -3,14 +3,14 @@
 function _help {
     echo "\
 Usage: git subrepo [list]
-    or: git subrepo install [--local] [--global] [--core]
-    or: git subrepo uninstall [--local] [--global] [--core]
-    or: git subrepo add <dir> <remote> [<branch>|<hash>]
-    or: git subrepo rm [-r] <dir>
-    or: git subrepo update [--top] [--rebase] [<dir1>] [<dir2>] ...
-    or: git subrepo publish [-m <message>] [-p]
-    or: git subrepo checkout <dir> [<branch>|<hash>]
-    or: git subrepo help
+   or: git subrepo install [--local] [--global] [--core]
+   or: git subrepo uninstall [--local] [--global] [--core]
+   or: git subrepo add <dir> <remote> [<branch>|<hash>]
+   or: git subrepo rm [-r] <dir>
+   or: git subrepo update [--top] [--rebase] [<dir1>] [<dir2>] ...
+   or: git subrepo publish [-m <message>] [-p]
+   or: git subrepo checkout <dir> [<branch>|<hash>]
+   or: git subrepo help
 
 Operations:
     list: Lists the current subrepos for this repository.
@@ -130,6 +130,7 @@ function _uninstall {
 function _add {
     local DIR=$1 REMOTE=$2 REF=${3:-master}
     
+    touch .gitrepos
     if grep -q "^$DIR " .gitrepos; then
 	echo "subrepo already exists as "$(grep "^$DIR " .gitrepos) >&2
 	return 1
@@ -323,14 +324,14 @@ function _publish {
 
 	pushd $DIR &>/dev/null
 
-	git fetch
+	git fetch >/dev/null
 	if [[ -n $HASH ]]; then
 	    if ! git branch -r --contains $REF &>/dev/null; then
 		echo "$DIR reference $REF not pushed to $REMOTE yet" >&2
 		return 1
 	    fi
 	else 
-	    if ! git branch -r | grep "origin/$REF"; then
+	    if ! git branch -r | grep -q "origin/$REF"; then
 		echo "$DIR branch $REF does not exist on $REMOTE yet" >&2
 		return 1
 	    fi
@@ -422,13 +423,13 @@ case $COMMAND in
     '') COMMAND=list ;&
 
     # Require a .gitrepos file for these commands
-    rm|update|checkout) 
+    rm|update|publish|checkout) 
         if [[ ! -e .gitrepos ]]; then
 	    echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&2
 	    exit 1
 	fi ;&
 
     # These do not require a .gitrepos file
-    help|install|uninstall) shift; _$COMMAND "${@}" ;;
+    add|help|install|uninstall) shift; _$COMMAND "${@}" ;;
     *) echo "Unknown subrepo command" >&2; exit 1;;
 esac
