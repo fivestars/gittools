@@ -14,7 +14,7 @@ function ps1-git() {
     # Record the state of the last command-line command
     RESULT=$?
 
-    local LAZY SHORT BEFORE='\e[1;37m' BEFORE_STALE='\e[0;37m' AFTER= AFTER_STALE= STALE= GIT_DIR
+    local LAZY SHORT BEFORE='\e[1;37m' BEFORE_STALE='\e[0;37m' AFTER AFTER_STALE STALE GIT_DIR
     local OPTIND OPTARG OPTERR OPT
     while getopts :ls:c:b:B:a:A: OPT; do
 	case $OPT in
@@ -101,14 +101,12 @@ function ps1-git() {
 	    
 	# Color code to white to let us know this is a fresh status
 	echo -en ${BEFORE}
-	# '\e[1;37m'
     else
 	# We're going to display a stale status
 	STALE=1
 
         # We'll be displaying a stale status in gray
 	echo -en ${BEFORE_STALE}
-	#'\e[0;37m'
     fi
 
     # Display the most recently generated status
