@@ -39,14 +39,16 @@ Operations:
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub repos' origins.
 
-    publish: Iterates through the subrepo list in the .gitrepos file
+    publish: A way to safely push changes to the .gitrepos file.
+             It iterates through the subrepo list in the .gitrepos file
              and verifies that they are checked out locally and that
              the specified refs(pins) are present in their remote 
              repositories.
              You are then prompted to continue with the add-commit-push
              of the .gitrepos file. If the -p option is provided, the
              prompt will be suppressed, and it will proceed as if you
-             had entered 'y'.             
+             had entered 'y'.
+             You can provide a commit message with -m.
 
     checkout: Switches a sub repo's ref-spec. This will update the
               sub repo's entry in the .gitrepos file as well.
