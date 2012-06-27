@@ -85,6 +85,7 @@ function _install {
     fi
 
     if [[ -n $GLOBAL ]]; then
+	echo "!$(git rev-parse --show-toplevel)/git-subrepo" && \
 	git config --global alias.subrepo "!$(git rev-parse --show-toplevel)/git-subrepo" && \
 	    echo "Added to your global aliases."
     fi
@@ -171,7 +172,7 @@ function _add {
 
     if git clone -b $REF $REMOTE $DIR; then
 	echo $DIR $REMOTE $REF >> .gitrepos
-	echo $DIR >> .gitignore
+	echo /$DIR >> .gitignore
 
 	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then	
 	    echo "Recursing to $DIR"
@@ -204,7 +205,7 @@ function _rm {
 	    fi
 	    sed -i'' "/^$DIR /d;/^$/d" .gitrepos
 	    if [[ -e .gitignore ]]; then
-		sed -i'' "/^${DIR}$/d;/^$/d" .gitignore
+		sed -i'' "/^\/${DIR}$/d;/^$/d" .gitignore
 	    fi
 	else
 	    echo "Unknown subrepo" >&2
