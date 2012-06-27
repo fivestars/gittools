@@ -141,6 +141,7 @@ function _add {
 
     if git clone -b $REF $REMOTE $DIR; then
 	echo $DIR $REMOTE $REF >> .gitrepos
+	echo $DIR >> .gitignore
     fi
 }
 
@@ -162,6 +163,9 @@ function _rm {
 	    echo "Removing subrepo record, leaving directory"
 	fi
 	sed -i'' "/^$DIR /d" .gitrepos
+	if [[ -e .gitignore ]]; then
+		sed -i '' "/^$DIR$/d" .gitignore
+	fi
     else
 	echo "Unknown subrepo" >&2
     fi
