@@ -5,9 +5,9 @@ function _help {
 Usage: git subrepo [list]
    or: git subrepo install [--local] [--global] [--core]
    or: git subrepo uninstall [--local] [--global] [--core]
-   or: git subrepo add [<dir>] <remote> [<branch>|<hash>]
-   or: git subrepo rm [-r] <dir>
-   or: git subrepo update [--top] [--rebase] [<dir1>] [<dir2>] ...
+   or: git subrepo add [-r] [<dir>] <remote> [<branch>|<hash>]
+   or: git subrepo rm [-r] <dir1> <dir2>...
+   or: git subrepo update [--top] [--rebase] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
    or: git subrepo publish [-m <message>] [-p]
    or: git subrepo checkout <dir> [<branch>|<hash>]
    or: git subrepo help
@@ -18,40 +18,49 @@ Operations:
     install: Installs 'git-subrepo' into any of three locations.
              --local: The repository's aliases (default)
              --global: Your global aliases
-             --core: Copies this file into this machine's git core directory.
-                     Any 'subrepo' aliases will no longer be effective.
+             --core: Copies this file into this machine's git core 
+                     directory. Any 'subrepo' aliases will no longer
+                     be effective.
 
     uninstall: Undoes the effects of 'install'.
 
     add: Adds a new repository as a sub repo. This will create an
          entry in the .gitrepos file and clone the repository
          to <dir>. If <branch> or <hash> is given, the repository
-         will be checked out to that ref-spec.
+         will be checked out to that ref-spec. If -r is given,
+         'git subrepo update -r' the new subrepo.
 
     rm: Removes a sub repo from this repository. This removes the
         sub repo's entry from the .gitrepos file. If the -r option
         is given, the sub repo's directory will be removed from
         the working directory as well.
 
-    update: Clones any new repositories found in the .gitrepos file
-            and pulls in any changes in existing sub repos. 
+    update: Clones any new repositories found in the .gitrepos
+            file and pulls in any changes in existing sub repos. 
             --top: Perform a pull on this top-level repo first.
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub repos' origins.
+            --file: Use the given file rather than the local 
+                    .gitrepos file.
+            -r: Recurse through our subrepos and update them as well.
+                Any specified <dir>s and the argument to the --file
+                option will only apply to the top-level repository 
+                in which this command is being invoked.
 
-    publish: A way to safely push changes to the .gitrepos file.
-             It iterates through the subrepo list in the .gitrepos file
-             and verifies that they are checked out locally and that
-             the specified refs(pins) are present in their remote 
-             repositories.
-             You are then prompted to continue with the add-commit-push
-             of the .gitrepos file. If the -p option is provided, the
-             prompt will be suppressed, and it will proceed as if you
-             had entered 'y'.
+    publish: Safely pushes changes to the .gitrepos file.
+             It iterates through the subrepo list in the .gitrepos 
+             file and verifies that they are checked out locally 
+             and that the specified refs(pins) are present in their 
+             remote repositories.
+             You are then prompted to continue with the 
+             add-commit-push of the .gitrepos file. If the -p 
+             option is provided, the prompt will be suppressed, 
+             and it will proceed as if you had entered 'y'.
              You can provide a commit message with -m.
 
-    checkout: Switches a sub repo's ref-spec. This will update the
-              sub repo's entry in the .gitrepos file as well.
+    checkout: Checks out a subrepo to the given ref-spec. This
+              will update the sub repo's entry in the .gitrepos
+              file to reflect this change as well.
 
     help: Displays this help message.
 "
@@ -128,7 +137,14 @@ function _uninstall {
 }
 
 function _add {
-    local DIR REMOTE REF
+    local DIR REMOTE REF RECURSE
+    local OPTARG OPTIND OPTERR OPT DELETE DIR
+    while getopts ":r" OPT; do
+	case $OPT in
+	    r) RECURSE=1;;
+	esac
+    done
+    shift $((OPTIND-1))
 
     if echo $1 | grep -q "\.git$"; then
 	read REMOTE REF <<< $@
@@ -147,9 +163,25 @@ function _add {
 	return 1
     fi
 
+    # Prevent using relative file paths
+    if [[ ${REMOTE:0:1} != '/' && ${REMOTE:0:8} != 'file:///' && -e $REMOTE ]]; then
+	echo "Cannot add a repository using a relative filepath" >&2
+	return 1
+    fi
+
     if git clone -b $REF $REMOTE $DIR; then
 	echo $DIR $REMOTE $REF >> .gitrepos
 	echo $DIR >> .gitignore
+
+	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then	
+	    echo "Recursing to $DIR"
+	    pushd $DIR &>/dev/null
+	    if ! $BASH_SOURCE update -r; then
+		echo "Failed to update $DIR" >&2
+		return 1
+	    fi
+	    popd &>/dev/null
+	fi 
     fi
 }
 
@@ -162,41 +194,50 @@ function _rm {
     done
     shift $((OPTIND-1))
 
-    DIR=$1
-    if grep -q "^$DIR " .gitrepos; then
-	if [[ -n $DELETE ]]; then
-	    echo "Removing subrepo record and directory"
-	    rm -rf $DIR
+    for DIR in $@; do
+	if grep -q "^$DIR " .gitrepos; then
+	    if [[ -n $DELETE ]]; then
+		echo "Removing subrepo record and directory"
+		rm -rf $DIR
+	    else
+		echo "Removing subrepo record, leaving directory"
+	    fi
+	    sed -i'' "/^$DIR /d;/^$/d" .gitrepos
+	    if [[ -e .gitignore ]]; then
+		sed -i'' "/^${DIR}$/d;/^$/d" .gitignore
+	    fi
 	else
-	    echo "Removing subrepo record, leaving directory"
+	    echo "Unknown subrepo" >&2
 	fi
-	sed -i'' "/^$DIR /d" .gitrepos
-	if [[ -e .gitignore ]]; then
-	    sed -i '' "/^$DIR$/d" .gitignore
-	fi
-    else
-	echo "Unknown subrepo" >&2
-    fi
+    done
 }
 
 function _update {
-    local DELETE REPOS REPO DIR REMOTE REF CREF HASH TOP REBASE LINE CHOICE
-
+    local ARGS DELETE REPOS REPO DIR REMOTE REF CREF HASH TOP REBASE RECURSE FILE=.gitrepos LINE CHOICE
+    
     local TOKENS TOKEN
     read -a TOKENS <<< "$@"
     for TOKEN in ${TOKENS[@]}; do
 	case $TOKEN in
-	    --rebase) shift; REBASE=$TOKEN;;
-	    --top) shift; TOP=1;;
-	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN"; return 1;;
+	    --rebase) shift; ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
+	    --top) shift; ARGS="${ARGS[@]} $TOKEN"; TOP=1;;
+	    -r) shift; ARGS="${ARGS[@]} $TOKEN"; RECURSE=1;;
+	    --file=*) shift; FILE=${TOKEN#--file=};;
+	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
     done
     REPOS="$@"
 
+    # Make sure the .gitrepos file exists
+    if [[ ! -e $FILE ]]; then
+	echo "No such file or directory: $FILE" >&2
+	return 1
+    fi
+
     # Update the top-level repository, if requested
     if [[ -n $TOP ]]; then
 	if ! git pull $REBASE; then
-	    exit 1
+	    return 1
 	fi
     fi
 
@@ -207,6 +248,7 @@ function _update {
     exec 10<&0
 
     while read LINE; do
+	echo
 	read DIR REMOTE REF <<< $(echo $LINE)
 
 	# See if the sub repo is pinned to a particular hash.
@@ -215,7 +257,7 @@ function _update {
 	    REF=${REF:2}
 	fi
 
-	# If the sub repo directory doesn't exist, we must clone it down
+	# If the sub repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
 	    echo -e "\033[1;37;42m $DIR($REF) -- $REMOTE \033[0m"
 	    if [[ -z $HASH ]]; then
@@ -238,8 +280,7 @@ function _update {
 		fi
 		popd &>/dev/null
 	    fi
-	    echo
-	else
+    	else
 	    # The sub repo directory is already present. Navigate to it.
 	    pushd $DIR &>/dev/null
 
@@ -258,7 +299,7 @@ function _update {
 	    else
 		CREF=$BRANCH
 	    fi
-
+	    
 	    # If they differ, ask how we're expected to handle it.
 	    if [[ $CREF != $REF ]]; then
 		echo -e "\033[1;37;41m $DIR($CREF) -- $REMOTE \033[0m"
@@ -289,23 +330,33 @@ function _update {
 		echo "Failed to merge changes from $REF. Resolve these issues and update again" >&2
 		return 1
 	    fi
-	    echo
+	    popd &>/dev/null
+	fi
+
+        # Recurse to this subrepo if it has a .gitrepos file
+	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
+	    echo "Recursing to $DIR"
+	    pushd $DIR &>/dev/null
+	    if ! $BASH_SOURCE update ${ARGS[@]}; then
+		echo "Failed to update $DIR" >&2
+		return 1
+	    fi
 	    popd &>/dev/null
 	fi
 
     done < <(
 	if [[ -n $REPOS ]]; then
 	    for REPO in ${REPOS[@]}; do 
-		grep "^$REPO " .gitrepos
+		grep "^$REPO " $FILE
 	    done
         else
-	    cat .gitrepos
-	fi)
+	    cat $FILE
+        fi)
 }
 
 function _publish {
     local MESSAGE="Updating subrepos" PUSH
-
+    
     local OPTARG OPTIND OPTERR OPT CHOICE
     while getopts ":m:p" OPT; do
 	case $OPT in
@@ -319,7 +370,7 @@ function _publish {
 	echo "Staged changes found. Please commit or remove them before continuing" >&2
 	return 1
     fi
-
+    
     local DIR REMOTE REF HASH
     while read LINE; do
 	read DIR REMOTE REF <<< $(echo $LINE)
@@ -327,13 +378,13 @@ function _publish {
 	    echo "Subrepo directory does not exist locally. Try running 'git subrepo update' first." >&2
 	    return 1
 	fi
-
+	
 	# See if the sub repo is pinned to a particular hash.
 	if [[ ${REF:0:2} == "!!" ]]; then
 	    HASH=1
 	    REF=${REF:2}
 	fi
-
+	
 	pushd $DIR &>/dev/null
 
 	git fetch >/dev/null
@@ -439,7 +490,7 @@ case $COMMAND in
         fi
         _$COMMAND "${@}"
         ;;
-
+    
     # These do not require a .gitrepos file
     add|help|install|uninstall) shift
         _$COMMAND "${@}"
