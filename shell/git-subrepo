@@ -5,7 +5,7 @@ function _help {
 Usage: git subrepo [list]
    or: git subrepo install [--local] [--global] [--core]
    or: git subrepo uninstall [--local] [--global] [--core]
-   or: git subrepo add <dir> <remote> [<branch>|<hash>]
+   or: git subrepo add [<dir>] <remote> [<branch>|<hash>]
    or: git subrepo rm [-r] <dir>
    or: git subrepo update [--top] [--rebase] [<dir1>] [<dir2>] ...
    or: git subrepo publish [-m <message>] [-p]
@@ -128,7 +128,15 @@ function _uninstall {
 }
 
 function _add {
-    local DIR=$1 REMOTE=$2 REF=${3:-master}
+    local DIR REMOTE REF
+
+    if echo $1 | grep -q "\.git$"; then
+	read REMOTE REF <<< $@
+	DIR=$(echo $REMOTE | sed 's/\(.*[:/]\|^\)\([^:/]\+\)\.git/\2/')
+    else
+	read DIR REMOTE REF <<< $@
+    fi
+    REF=${REF:-master}
     
     touch .gitrepos
     if grep -q "^$DIR " .gitrepos; then
@@ -164,7 +172,7 @@ function _rm {
 	fi
 	sed -i'' "/^$DIR /d" .gitrepos
 	if [[ -e .gitignore ]]; then
-		sed -i '' "/^$DIR$/d" .gitignore
+	    sed -i '' "/^$DIR$/d" .gitignore
 	fi
     else
 	echo "Unknown subrepo" >&2
