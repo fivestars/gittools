@@ -258,6 +258,40 @@ function _update {
 	    REF=${REF:2}
 	fi
 
+	# First, check to see if the remote has changed. If so, make sure to preserve any
+	# local, non-published changes. Otherwise, we can safely delete it and proceed
+	# as if it's a brand new subrepo.
+	if [[ -e $DIR ]]; then
+	    # The sub repo directory is already present. Navigate to it.
+	    pushd $DIR &>/dev/null
+	    
+	    # If we detect that the sub repo's remote has changed, force a manual intervention.
+	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
+		
+		# Fetch remote changes so we can compare to latest data.
+		git fetch &>/dev/null
+		local MESSAGE=""
+		[[ $(git ls-files -o --exclude-standard | wc -l) != 0 ]] && \
+		    MESSAGE="$MESSAGE - new files\n"
+		[[ $(git ls-files -dm | wc -l) != 0 ]] && \
+		    MESSAGE="$MESSAGE - edits\n"
+		[[ $(git diff --name-only --cached | wc -l) != 0 ]] && \
+		    MESSAGE="$MESSAGE - staged changes\n"
+		[[ $(git rev-list --all --not --remotes | wc -l) != 0 ]] && \
+		    MESSAGE="$MESSAGE - local commits or stashed changes\n"
+
+		if [[ -n $MESSAGE ]]; then
+		    echo -e "\033[1;37;41m $DIR($REF) -- $REMOTE \033[0m"
+		    echo -e "Remote has changed for this subrepo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this subrepo directory and update again." >&2
+		    return 1
+		else
+		    # It's safe to switch to the new remote, so delete the current subrepo.
+		    popd &>/dev/null
+		    rm -rf $DIR
+		fi
+	    fi
+	fi
+	
 	# If the sub repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
 	    echo -e "\033[1;37;42m $DIR($REF) -- $REMOTE \033[0m"
@@ -281,16 +315,9 @@ function _update {
 		fi
 		popd &>/dev/null
 	    fi
-    	else
+	else
 	    # The sub repo directory is already present. Navigate to it.
 	    pushd $DIR &>/dev/null
-
-	    # If we detect that the sub repo's remote has changed, force a manual intervention.
-	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
-		echo -e "\033[1;37;41m $DIR($REF) -- $REMOTE \033[0m"
-		echo "Remote has changed for this subrepo. You must manually remove this directory before updating can proceed." >&2
-		return 1
-	    fi
 
 	    # Determine the currently checked out branch of the sub repo.
 	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
@@ -310,7 +337,7 @@ function _update {
 		echo " s) switch to the subrepo branch (will replace the current branch with the subrepo branch)"
 		echo " c) checkout the current branch (will set the current branch as the subrepo branch)"
 		read -u 10 CHOICE
-
+		
 		[[ -n $CHOICE ]] || CHOICE=k
 		case $CHOICE in
 		    k) continue;;
@@ -415,7 +442,7 @@ function _publish {
     fi
 
     # Let's do it.
-    git add .gitrepos
+    git add .gitrepos .gitignore
     git commit -m "$MESSAGE"
     git push
 }
