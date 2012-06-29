@@ -58,7 +58,7 @@ function ps1-git() {
 	fi
 
 	# Determine our upstream branch
-	local UPSTREAM=
+	local UPSTREAM
 	UPSTREAM=$(git rev-parse --abbrev-ref @{u} 2>/dev/null) || UPSTREAM=
 
         # Collect our statii in this empty array
@@ -91,7 +91,7 @@ function ps1-git() {
 	STATII=$(echo -n ${STATII[*]})
 	
 	# Display branch information (upstream, too, if available)
-	local BRANCHES=
+	local BRANCHES
 	if [[ -z $BRANCH ]]; then
 	    BRANCHES="[master]"
 	elif [[ -z $UPSTREAM ]]; then
