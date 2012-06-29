@@ -5,15 +5,36 @@ function _help {
 Usage: git subrepo [list]
    or: git subrepo install [--local] [--global] [--core]
    or: git subrepo uninstall [--local] [--global] [--core]
-   or: git subrepo add [-r] [<dir>] <remote> [<branch>|<hash>]
+   or: git subrepo add [-r] [<dir>] <remote> [<pin>]
    or: git subrepo rm [-r] <dir1> <dir2>...
+   or: git subrepo checkout <dir> [<pin>]
    or: git subrepo update [--top] [--rebase] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
    or: git subrepo publish [-m <message>] [-p]
-   or: git subrepo checkout <dir> [<branch>|<hash>]
    or: git subrepo help
 
+Files:
+    .gitrepos: This is where git-subrepo stores its tracking information.
+               Like .gitignore, it is intended to be committed like any
+               other file in your repository. Each line is an entry
+               that describes a sub-repo. The lines have the following
+               format:
+                   <path> <remote> [<pin>]
+
+               <path>: The filepath location of the cloned sub-repo.
+                       It is relative to the top-level directory of the
+                       parent repository (the one containing the .gitrepos
+                       file).
+               <remote>: The git url of the sub-repo. If this is a file://
+                         url, it must be an absolute path.
+               <pin>: A branch or commit in the sub-repo.
+                      git-subrepo will checkout this pin upon 'add' and
+                      'update' and will use it as a basis for detecting
+                      changes during other operations. If not present, 
+                      git-subrepo will not monitor changes in that sub-repo
+                      and expect that you are managing it manually.
+
 Operations:
-    list: Lists the current subrepos for this repository.
+    list: Lists the current sub-repos for this repository.
 
     install: Installs 'git-subrepo' into any of three locations.
              --local: The repository's aliases (default)
@@ -24,43 +45,61 @@ Operations:
 
     uninstall: Undoes the effects of 'install'.
 
-    add: Adds a new repository as a sub repo. This will create an
+    add: Adds a new repository as a sub-repo. This will create an
          entry in the .gitrepos file and clone the repository
-         to <dir>. If <branch> or <hash> is given, the repository
-         will be checked out to that ref-spec. If -r is given,
-         'git subrepo update -r' the new subrepo.
+         to <dir>.
+         If <pin> is given, the repository will be checked out to
+         that branch or commit, and it will be recorded in the 
+         sub-repo's .gitrepos entry.
 
-    rm: Removes a sub repo from this repository. This removes the
-        sub repo's entry from the .gitrepos file. If the -r option
-        is given, the sub repo's directory will be removed from
-        the working directory as well.
+         -r: 'git subrepo update -r' the new sub-repo.
+
+    rm: Removes a sub-repo from this repository. This removes the
+        sub-repo's entry from the .gitrepos file.
+
+        -r: the sub-repo's directory will be removed from the
+            working directory as well.
+
+    checkout: Checks out a sub-repo to the given <pin>. 
+              This branch or commit will be recorded in the sub-repo's
+              .gitrepos entry.
+              If no <pin> is given, the sub-repo's pin value will
+              be cleared from the .gitrepos file.
 
     update: Clones any new repositories found in the .gitrepos
-            file and pulls in any changes in existing sub repos. 
+            file and pulls down any changes for the existing
+            sub-repos.
+            If the sub-repo's remote differs from the one specified
+            and there are unpushed changes in that sub-repo, you
+            will be prompted to resolve these changes before
+            continuing.
+            If a the sub-repo has a pin in the .gitrepos file and
+            it differs from the sub-repo's currently checked out
+            branch or commit, you will be given a choice of how
+            to handle it (switch, keep, overwrite).
+
             --top: Perform a pull on this top-level repo first.
             --rebase: Perform a rebase rather than a merge when
-                      pulling commits from the sub repos' origins.
+                      pulling commits from the sub-repos' origins.
+                      Also used with the --top pull.
             --file: Use the given file rather than the local 
                     .gitrepos file.
-            -r: Recurse through our subrepos and update them as well.
+            -r: Recurse through our sub-repos and update them as well.
                 Any specified <dir>s and the argument to the --file
                 option will only apply to the top-level repository 
                 in which this command is being invoked.
 
-    publish: Safely pushes changes to the .gitrepos file.
-             It iterates through the subrepo list in the .gitrepos 
+    publish: Safely pushes the current .gitrepos file.
+             It iterates through the sub-repo list in the .gitrepos
              file and verifies that they are checked out locally 
-             and that the specified refs(pins) are present in their 
-             remote repositories.
-             You are then prompted to continue with the 
-             add-commit-push of the .gitrepos file. If the -p 
-             option is provided, the prompt will be suppressed, 
-             and it will proceed as if you had entered 'y'.
-             You can provide a commit message with -m.
+             and that each pin(if present) exists in its remote 
+             repository.
+             You are then prompted to continue with the add-commit-push
+             of the .gitrepos file.
 
-    checkout: Checks out a subrepo to the given ref-spec. This
-              will update the sub repo's entry in the .gitrepos
-              file to reflect this change as well.
+             -p: The prompt will be suppressed, and it will proceed
+                 as if you had entered 'y'.
+             -m: The commit message.
 
     help: Displays this help message.
 "
@@ -138,7 +177,7 @@ function _uninstall {
 }
 
 function _add {
-    local DIR REMOTE REF RECURSE
+    local DIR REMOTE PIN RECURSE
     local OPTARG OPTIND OPTERR OPT DELETE DIR
     while getopts ":r" OPT; do
 	case $OPT in
@@ -148,41 +187,58 @@ function _add {
     shift $((OPTIND-1))
 
     if echo $1 | grep -q "\.git$"; then
-	read REMOTE REF <<< $@
+	read REMOTE PIN <<< $@
 	DIR=$(echo $REMOTE | sed 's/\(.*[:/]\|^\)\([^:/]\+\)\.git/\2/')
     else
-	read DIR REMOTE REF <<< $@
+	read DIR REMOTE PIN <<< $@
     fi
-    REF=${REF:-master}
     
     touch .gitrepos
     if grep -q "^$DIR " .gitrepos; then
-	echo "subrepo already exists as "$(grep "^$DIR " .gitrepos) >&2
+	echo "Sub-repo already exists as "$(grep "^$DIR " .gitrepos) >&2
 	return 1
     elif [[ -e $DIR ]]; then
-	echo "$DIR is already present. Move aside or choose another location for your subrepo." >&2
+	echo "$DIR is already present. Move aside or choose another location for your sub-repo." >&2
 	return 1
     fi
 
-    # Prevent using relative file paths
+    # Prevent the use of relative file paths
     if [[ ${REMOTE:0:1} != '/' && ${REMOTE:0:8} != 'file:///' && -e $REMOTE ]]; then
-	echo "Cannot add a repository using a relative filepath" >&2
+	echo "Will not add a repository using a relative filepath" >&2
 	return 1
     fi
 
-    if git clone -b $REF $REMOTE $DIR; then
-	echo $DIR $REMOTE $REF >> .gitrepos
-	echo /$DIR >> .gitignore
+    if ! git clone $REMOTE $DIR; then
+	echo "Failed to clone sub-repo" >&2
+	return 1
+    fi
 
-	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then	
-	    echo "Recursing to $DIR"
-	    pushd $DIR &>/dev/null
-	    if ! $BASH_SOURCE update -r; then
-		echo "Failed to update $DIR" >&2
-		return 1
-	    fi
-	    popd &>/dev/null
-	fi 
+    if [[ -n $PIN ]]; then
+	if ! git rev-list --quiet $PIN -- &>/dev/null; then
+	    echo "$PIN is not a valid branch or commit for this repository" >&2
+	    return 1
+	fi
+	
+	# Attempt to checkout $PIN for this sub-repo
+	pushd &>/dev/null
+	if ! git checkout $PIN; then
+	    echo "Failed to checkout $PIN" >&2
+	    return 1
+	fi
+	popd &>/dev/null
+    fi
+    
+    echo $DIR $REMOTE $PIN >> .gitrepos
+    echo /$DIR >> .gitignore
+    
+    if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
+	echo "Recursing to $DIR"
+	pushd $DIR &>/dev/null
+	if ! $BASH_SOURCE update -r; then
+	    echo "Failed to update $DIR" >&2
+	    return 1
+	fi
+	popd &>/dev/null
     fi
 }
 
@@ -198,23 +254,23 @@ function _rm {
     for DIR in $@; do
 	if grep -q "^$DIR " .gitrepos; then
 	    if [[ -n $DELETE ]]; then
-		echo "Removing subrepo record and directory"
+		echo "Removing sub-repo record and directory"
 		rm -rf $DIR
 	    else
-		echo "Removing subrepo record, leaving directory"
+		echo "Removing sub-repo record, leaving directory"
 	    fi
 	    sed -i'' "/^$DIR /d;/^$/d" .gitrepos
 	    if [[ -e .gitignore ]]; then
 		sed -i'' "/^\/${DIR}$/d;/^$/d" .gitignore
 	    fi
 	else
-	    echo "Unknown subrepo" >&2
+	    echo "Unknown sub-repo" >&2
 	fi
     done
 }
 
 function _update {
-    local ARGS DELETE REPOS REPO DIR REMOTE REF CREF HASH TOP REBASE RECURSE FILE=.gitrepos LINE CHOICE
+    local ARGS DELETE REPOS REPO DIR REMOTE PIN CPIN COMMIT TOP REBASE RECURSE FILE=.gitrepos LINE CHOICE
     
     local TOKENS TOKEN
     read -a TOKENS <<< "$@"
@@ -250,26 +306,29 @@ function _update {
 
     while read LINE; do
 	echo
-	read DIR REMOTE REF <<< $(echo $LINE)
+	read DIR REMOTE PIN <<< $(echo $LINE)
 
-	# See if the sub repo is pinned to a particular hash.
-	if [[ ${REF:0:2} == "!!" ]]; then
-	    HASH=1
-	    REF=${REF:2}
+	# See if the sub-repo is pinned to a particular commit.
+	if [[ ${PIN:0:2} == "!!" ]]; then
+	    COMMIT=1
+	    PIN=${PIN:2}
 	fi
 
 	# First, check to see if the remote has changed. If so, make sure to preserve any
 	# local, non-published changes. Otherwise, we can safely delete it and proceed
-	# as if it's a brand new subrepo.
+	# as if it's a brand new sub-repo.
 	if [[ -e $DIR ]]; then
-	    # The sub repo directory is already present. Navigate to it.
+	    # The sub-repo directory is already present. Navigate to it.
 	    pushd $DIR &>/dev/null
 	    
-	    # If we detect that the sub repo's remote has changed, force a manual intervention.
+	    # If we detect that the sub-repo's remote has changed, force a manual intervention.
 	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
 		
 		# Fetch remote changes so we can compare to latest data.
-		git fetch &>/dev/null
+		if ! git fetch &>/dev/null; then
+		    echo "Failed to fetch remote changes." >&2
+		    return 1
+		fi
 		local MESSAGE=""
 		[[ $(git ls-files -o --exclude-standard | wc -l) != 0 ]] && \
 		    MESSAGE="$MESSAGE - new files\n"
@@ -281,87 +340,112 @@ function _update {
 		    MESSAGE="$MESSAGE - local commits or stashed changes\n"
 
 		if [[ -n $MESSAGE ]]; then
-		    echo -e "\033[1;37;41m $DIR($REF) -- $REMOTE \033[0m"
-		    echo -e "Remote has changed for this subrepo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this subrepo directory and update again." >&2
+		    echo -e "\033[1;37;41m $DIR($PIN) -- $REMOTE \033[0m"
+		    echo -e "Remote has changed for this sub-repo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this sub-repo directory and update again." >&2
 		    return 1
 		else
-		    # It's safe to switch to the new remote, so delete the current subrepo.
+		    # It's safe to switch to the new remote, so delete the current sub-repo.
 		    popd &>/dev/null
 		    rm -rf $DIR
 		fi
+	    else
+		popd &>/dev/null
 	    fi
 	fi
 	
-	# If the sub repo directory doesn't exist, we must clone it down now
+	# If the sub-repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
-	    echo -e "\033[1;37;42m $DIR($REF) -- $REMOTE \033[0m"
-	    if [[ -z $HASH ]]; then
-	        # If it's not a hash, we should be able to clone it
+	    echo -e "\033[1;37;42m $DIR($PIN) -- $REMOTE \033[0m"
+	    if [[ -z $COMMIT ]]; then
+	        # If it's not a commit, we should be able to clone it
 	        # with the branch already checked out.
-		if ! git clone -b $REF $REMOTE $DIR; then
-		    echo "Failed to clone subrepo" >&2
+		if ! git clone $REMOTE $DIR; then
+		    echo "Failed to clone sub-repo" >&2
 		    return 1
+		fi
+		if [[ -n $PIN ]]; then
+		    pushd &>/dev/null
+		    if ! git checkout $PIN; then
+			echo "Failed to checkout $PIN" >&2
+			return 1
+		    fi
+		    popd &>/dev/null
 		fi
 	    else
-		# Otherwise, we'll clone it normally, then checkout the hash.
+		# Otherwise, we'll clone it normally, then checkout the commit.
 		if ! git clone $REMOTE $DIR; then
-		    echo "Failed to clone subrepo" >&2
+		    echo "Failed to clone sub-repo" >&2
 		    return 1
 		fi
-		pushd $DIR &>/dev/null
-		if ! git checkout $REF; then
-		    echo "Failed to checkout $REF" >&2
-		    return 1
+		if [[ -n $PIN ]]; then
+		    pushd $DIR &>/dev/null
+		    if ! git checkout $PIN; then
+			echo "Failed to checkout $PIN" >&2
+			return 1
+		    fi
+		    popd &>/dev/null
 		fi
-		popd &>/dev/null
 	    fi
 	else
-	    # The sub repo directory is already present. Navigate to it.
+	    # The sub-repo directory is already present. Navigate to it.
 	    pushd $DIR &>/dev/null
 
-	    # Determine the currently checked out branch of the sub repo.
+	    # Determine the currently checked out branch of the sub-repo.
 	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
 	    if [[ "$BRANCH" == "(no branch)" ]]; then
 		local REFLOG=$(git reflog -n1)
-		CREF=${REFLOG%% *}
+		CPIN=${REFLOG%% *}
 	    else
-		CREF=$BRANCH
+		CPIN=$BRANCH
 	    fi
-	    
+
 	    # If they differ, ask how we're expected to handle it.
-	    if [[ $CREF != $REF ]]; then
-		echo -e "\033[1;37;41m $DIR($CREF) -- $REMOTE \033[0m"
-		echo "Your current branch does not match the specified subrepo branch: $REF"
+	    if [[ -n $PIN && $CPIN != $PIN ]]; then
+		echo -e "\033[1;37;41m $DIR($CPIN) -- $REMOTE \033[0m"
+		echo "Your current pin does not match the specified sub-repo pin: $PIN"
 		echo "What would you like to do?"
-		echo " k) keep the current branch (default)"
-		echo " s) switch to the subrepo branch (will replace the current branch with the subrepo branch)"
-		echo " c) checkout the current branch (will set the current branch as the subrepo branch)"
+		echo " s) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
+		echo " k) keep the current pin (make no changes)"
+		echo " o) overwrite the .gitrepos pin with the current pin"
 		read -u 10 CHOICE
-		
-		[[ -n $CHOICE ]] || CHOICE=k
-		case $CHOICE in
-		    k) continue;;
-		    s) ;;
-		    c) _checkout "$DIR" "$CREF";;
-		    *) echo "Invalid choice: $CHOICE. Stopping." >&2; return 1;;
+
+		case ${CHOICE:=k} in
+		    s)  ;;
+		    k)  continue;;
+		    o)  popd >/dev/null;
+			_checkout $DIR $CPIN;
+			pushd $DIR >/dev/null;
+			continue;;
+		    *)  echo "Invalid choice: $CHOICE. Stopping." >&2;
+			return 1;;
 		esac
 	    else
-		echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
+		echo -e "\033[30;47m $DIR($PIN) -- $REMOTE \033[0m"
 	    fi
 	    
-	    if ! { git fetch && git checkout $REF; }; then
-		echo "Failed to checkout $REF" >&2
+	    if ! git fetch; then
+		echo "Failed to fetch $PIN" >&2
 		return 1
 	    fi
 	    
-	    if [[ -z $HASH ]] && ! git pull $REBASE; then
-		echo "Failed to merge changes from $REF. Resolve these issues and update again" >&2
+	    if [[ -n $PIN ]] && ! git checkout $PIN; then
+		echo "Failed to checkout $PIN" >&2
+		return 1
+	    fi
+	    
+	    # If we don't have a pin from the .gitrepos
+	    # file, go ahead and use the current checkout.
+	    PIN=${PIN:-$CPIN}
+
+	    # If we're on a branch and that branch has an upstream but we fail to pull
+	    if [[ -z $COMMIT ]] && git rev-parse @{u} &>/dev/null && ! git pull $REBASE; then
+		echo "Failed to merge changes from $PIN. Resolve these issues and update again" >&2
 		return 1
 	    fi
 	    popd &>/dev/null
 	fi
 
-        # Recurse to this subrepo if it has a .gitrepos file
+        # Recurse to this sub-repo if it has a .gitrepos file
 	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	    echo "Recursing to $DIR"
 	    pushd $DIR &>/dev/null
@@ -383,7 +467,7 @@ function _update {
 }
 
 function _publish {
-    local MESSAGE="Updating subrepos" PUSH
+    local MESSAGE="Updating sub-repos" PUSH
     
     local OPTARG OPTIND OPTERR OPT CHOICE
     while getopts ":m:p" OPT; do
@@ -399,31 +483,35 @@ function _publish {
 	return 1
     fi
     
-    local DIR REMOTE REF HASH
+    local DIR REMOTE PIN COMMIT
     while read LINE; do
-	read DIR REMOTE REF <<< $(echo $LINE)
+	read DIR REMOTE PIN <<< $(echo $LINE)
 	if [[ ! -e $DIR ]]; then
-	    echo "Subrepo directory does not exist locally. Try running 'git subrepo update' first." >&2
+	    echo "Sub-repo directory does not exist locally. Try running 'git subrepo update' first." >&2
 	    return 1
 	fi
 	
-	# See if the sub repo is pinned to a particular hash.
-	if [[ ${REF:0:2} == "!!" ]]; then
-	    HASH=1
-	    REF=${REF:2}
+	# See if the sub-repo is pinned to a particular commit.
+	if [[ ${PIN:0:2} == "!!" ]]; then
+	    COMMIT=1
+	    PIN=${PIN:2}
 	fi
 	
 	pushd $DIR &>/dev/null
 
-	git fetch >/dev/null
-	if [[ -n $HASH ]]; then
-	    if ! git branch -r --contains $REF &>/dev/null; then
-		echo "$DIR reference $REF not pushed to $REMOTE yet" >&2
+	if ! git fetch &>/dev/null; then
+	    echo "Failed to fetch remote changes." >&2
+	    return 1
+	fi
+	
+	if [[ -n $COMMIT ]]; then
+	    if ! git branch -r --contains $PIN &>/dev/null; then
+		echo "$DIR reference $PIN not pushed to $REMOTE yet" >&2
 		return 1
 	    fi
-	else 
-	    if ! git branch -r | grep -q "origin/$REF"; then
-		echo "$DIR branch $REF does not exist on $REMOTE yet" >&2
+	elif [[ -n $PIN ]]; then
+	    if ! git branch -r | grep -q "origin/$PIN"; then
+		echo "$DIR branch $PIN does not exist on $REMOTE yet" >&2
 		return 1
 	    fi
 	fi
@@ -448,41 +536,47 @@ function _publish {
 }
 
 function _checkout {
-    local DIR=$1 REF=$2 REMOTE LINE 
+    local DIR=$1 PIN=$2 REMOTE LINE 
 
     if ! LINE=$(grep "^$DIR " .gitrepos); then
-	echo "Unknown subrepo" >&2
+	echo "Unknown sub-repo" >&2
     elif [[ ! -e $DIR ]]; then
-	echo "Could not find subrepo at $DIR" >&2
-    else
+	echo "Could not find sub-repo at $DIR. Try using 'git subrepo add'" >&2
+    elif [[ -n $PIN ]]; then
 	REMOTE=$(echo $LINE | cut -d' ' -f2)
 	pushd $DIR &>/dev/null
-	echo -e "\033[30;47m $DIR($REF) -- $REMOTE \033[0m"
-	if git checkout $REF; then
+	echo -e "\033[30;47m $DIR($PIN) -- $REMOTE \033[0m"
+	if git checkout $PIN; then
 	    if git branch | grep -q "(no branch)"; then
-		REF="!!$REF"
+		PIN="!!$PIN"
 	    fi
 	    popd &>/dev/null
-
+	    
 	    REMOTE=$(echo $REMOTE | sed "s/\//\\\\\//g")
-	    sed -i "s/^$DIR .*/$DIR $REMOTE $REF/" .gitrepos
+	    sed -i "s/^$DIR .*/$DIR $REMOTE $PIN/" .gitrepos
 	else
+	    echo "Failed to checkout $PIN" >&2
 	    popd &>/dev/null
+	    return 1
 	fi
 	echo
+    else
+	REMOTE=$(echo $LINE | cut -d' ' -f2 | sed "s/\//\\\\\//g")
+	sed -i "s/^$DIR .*/$DIR $REMOTE/" .gitrepos
     fi
 }
 
 function _list {
-    local DIR REMOTE REF CREF REF_ERR_BEGIN REM_ERR_BEGIN ERR_END="\033[0m"
-    local FORMAT="%-20s %b%-12s %-12s%b %b%s%b\n"
-    printf "$FORMAT" "Path" "$REF_ERR_BEGIN" "Subrepo Ref" "Current Ref" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
-    echo "----------------------------------------------------------------------------"
+    local DIR REMOTE PIN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END="\033[0m"
+    local FORMAT="%-20s %b%-15s %-15s%b %b%s%b\n"
+    printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" ".gitrepos Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
+    echo "------------------------------------------------------------------------------------"
     while read LINE; do
-	read DIR REMOTE REF <<< $(echo $LINE)
+	read DIR REMOTE PIN <<< $(echo $LINE)
+	
 	if [[ ! -e $DIR ]]; then
-	    CREF="(not present)"
-	    REF_ERR_BEGIN="\033[1;37;41m"
+	    CPIN="(not present)"
+	    PIN_ERR_BEGIN="\033[1;37;41m"
 	    REM_ERR_BEGIN=
 	else
 	    pushd $DIR &>/dev/null
@@ -490,18 +584,17 @@ function _list {
 	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
 	    if [[ "$BRANCH" == "(no branch)" ]]; then
 		local REFLOG=$(git reflog -n1)
-		CREF=${REFLOG%% *}
+		CPIN=${REFLOG%% *}
 	    else
-		CREF=$BRANCH
+		CPIN=$BRANCH
 	    fi
-	    
-	    [[ $REF == $CREF ]] && REF_ERR_BEGIN= || REF_ERR_BEGIN="\033[1;37;41m"
+	    [[ -z $PIN ]] || [[ $PIN == $CPIN ]] && PIN_ERR_BEGIN= || PIN_ERR_BEGIN="\033[1;37;41m"
 	    git remote -v | grep -q "origin[[:space:]]\+$REMOTE" && REM_ERR_BEGIN= || REM_ERR_BEGIN="\033[1;37;41m"
 	    
 	    popd &>/dev/null
 	fi
 	
-	printf "$FORMAT" "$DIR" "$REF_ERR_BEGIN" "$REF" "$CREF" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
+	printf "$FORMAT" "$DIR" "$PIN_ERR_BEGIN" "${PIN:---}" "$CPIN" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
     done < .gitrepos
 }
 
@@ -523,7 +616,7 @@ case $COMMAND in
     add|help|install|uninstall) shift
         _$COMMAND "${@}"
         ;;
-    *)  echo "Unknown subrepo command '$COMMAND'" >&2
+    *)  echo "Unknown sub-repo command '$COMMAND'" >&2
         exit 1
         ;;
 esac
