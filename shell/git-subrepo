@@ -223,12 +223,12 @@ function _add {
 	fi
 	
 	# Attempt to checkout $PIN for this sub-repo
-	pushd &>/dev/null
+	pushd $DIR >/dev/null
 	if ! git checkout $PIN; then
 	    echo "Failed to checkout $PIN" >&2
 	    return 1
 	fi
-	popd &>/dev/null
+	popd >/dev/null
     fi
     
     echo $DIR $REMOTE $PIN >> .gitrepos
@@ -236,12 +236,12 @@ function _add {
     
     if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	echo "Recursing to $DIR"
-	pushd $DIR &>/dev/null
+	pushd $DIR >/dev/null
 	if ! $BASH_SOURCE update -r; then
 	    echo "Failed to update $DIR" >&2
 	    return 1
 	fi
-	popd &>/dev/null
+	popd >/dev/null
     fi
 }
 
@@ -323,7 +323,7 @@ function _update {
 	# as if it's a brand new sub-repo.
 	if [[ -e $DIR ]]; then
 	    # The sub-repo directory is already present. Navigate to it.
-	    pushd $DIR &>/dev/null
+	    pushd $DIR >/dev/null
 	    
 	    # If we detect that the sub-repo's remote has changed, force a manual intervention.
 	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
@@ -349,11 +349,11 @@ function _update {
 		    return 1
 		else
 		    # It's safe to switch to the new remote, so delete the current sub-repo.
-		    popd &>/dev/null
+		    popd >/dev/null
 		    rm -rf $DIR
 		fi
 	    else
-		popd &>/dev/null
+		popd >/dev/null
 	    fi
 	fi
 	
@@ -368,12 +368,12 @@ function _update {
 		    return 1
 		fi
 		if [[ -n $PIN ]]; then
-		    pushd &>/dev/null
+		    pushd $DIR >/dev/null
 		    if ! git checkout $PIN; then
 			echo "Failed to checkout $PIN" >&2
 			return 1
 		    fi
-		    popd &>/dev/null
+		    popd >/dev/null
 		fi
 	    else
 		# Otherwise, we'll clone it normally, then checkout the commit.
@@ -382,17 +382,17 @@ function _update {
 		    return 1
 		fi
 		if [[ -n $PIN ]]; then
-		    pushd $DIR &>/dev/null
+		    pushd $DIR >/dev/null
 		    if ! git checkout $PIN; then
 			echo "Failed to checkout $PIN" >&2
 			return 1
 		    fi
-		    popd &>/dev/null
+		    popd >/dev/null
 		fi
 	    fi
 	else
 	    # The sub-repo directory is already present. Navigate to it.
-	    pushd $DIR &>/dev/null
+	    pushd $DIR >/dev/null
 
 	    # Determine the currently checked out branch of the sub-repo.
 	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
@@ -450,20 +450,20 @@ function _update {
 		echo "Failed to merge changes from $PIN. Resolve these issues and update again" >&2
 		return 1
 	    fi
-	    popd &>/dev/null
+	    popd >/dev/null
 	fi
 
         # Recurse to this sub-repo if it has a .gitrepos file
 	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	    echo "Recursing to $DIR"
-	    pushd $DIR &>/dev/null
+	    pushd $DIR >/dev/null
 	    if ! $BASH_SOURCE update ${ARGS[@]}; then
 		echo "Failed to update $DIR" >&2
 		return 1
 	    fi
-	    popd &>/dev/null
+	    popd >/dev/null
 	fi
-
+	return
     done < <(
 	if [[ -n $REPOS ]]; then
 	    for REPO in ${REPOS[@]}; do 
@@ -505,7 +505,7 @@ function _publish {
 	    PIN=${PIN:2}
 	fi
 	
-	pushd $DIR &>/dev/null
+	pushd $DIR >/dev/null
 
 	if ! git fetch &>/dev/null; then
 	    echo "Failed to fetch remote changes." >&2
@@ -524,7 +524,7 @@ function _publish {
 	    fi
 	fi
 
-	popd &>/dev/null
+	popd >/dev/null
 
     done < .gitrepos
 
@@ -552,19 +552,19 @@ function _checkout {
 	echo "Could not find sub-repo at $DIR. Try using 'git subrepo add'" >&2
     elif [[ -n $PIN ]]; then
 	REMOTE=$(echo $LINE | cut -d' ' -f2)
-	pushd $DIR &>/dev/null
+	pushd $DIR >/dev/null
 	echo -e "\033[30;47m $DIR($PIN) -- $REMOTE \033[0m"
 	if git checkout $PIN; then
 	    if git branch | grep -q "(no branch)"; then
 		PIN="!!$PIN"
 	    fi
-	    popd &>/dev/null
+	    popd >/dev/null
 	    
 	    REMOTE=$(echo $REMOTE | sed "s/\//\\\\\//g")
 	    sed -i "s/^$DIR .*/$DIR $REMOTE $PIN/" .gitrepos
 	else
 	    echo "Failed to checkout $PIN" >&2
-	    popd &>/dev/null
+	    popd >/dev/null
 	    return 1
 	fi
 	echo
@@ -587,7 +587,7 @@ function _list {
 	    PIN_ERR_BEGIN="\033[1;37;41m"
 	    REM_ERR_BEGIN=
 	else
-	    pushd $DIR &>/dev/null
+	    pushd $DIR >/dev/null
 	    
 	    local BRANCH=$(git branch | grep '^*' | sed 's/* //')
 	    if [[ "$BRANCH" == "(no branch)" ]]; then
@@ -599,7 +599,7 @@ function _list {
 	    [[ -z $PIN ]] || [[ $PIN == $CPIN ]] && PIN_ERR_BEGIN= || PIN_ERR_BEGIN="\033[1;37;41m"
 	    git remote -v | grep -q "origin[[:space:]]\+$REMOTE" && REM_ERR_BEGIN= || REM_ERR_BEGIN="\033[1;37;41m"
 	    
-	    popd &>/dev/null
+	    popd >/dev/null
 	fi
 	
 	printf "$FORMAT" "$DIR" "$PIN_ERR_BEGIN" "${PIN:---}" "$CPIN" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
