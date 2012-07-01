@@ -381,8 +381,12 @@ function _update {
 		    echo "Failed to clone sub-repo" >&2
 		    return 1
 		fi
+		pwd
+		ls -l
+		echo $DIR
 		if [[ -n $PIN ]]; then
 		    pushd $DIR >/dev/null
+		    pwd
 		    if ! git checkout $PIN; then
 			echo "Failed to checkout $PIN" >&2
 			return 1
@@ -463,7 +467,6 @@ function _update {
 	    fi
 	    popd >/dev/null
 	fi
-	return
     done < <(
 	if [[ -n $REPOS ]]; then
 	    for REPO in ${REPOS[@]}; do 
