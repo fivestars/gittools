@@ -8,7 +8,7 @@ Usage: git subrepo [list]
    or: git subrepo add [-r] [<dir>] <remote> [<pin>]
    or: git subrepo rm [-r] <dir1> <dir2>...
    or: git subrepo checkout <dir> [<pin>]
-   or: git subrepo update [--top] [--rebase] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
+   or: git subrepo update [--top] [--rebase] [--choice=s|k|o] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
    or: git subrepo publish [-m <message>] [-p]
    or: git subrepo help
 
@@ -82,12 +82,15 @@ Operations:
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub-repos' origins.
                       Also used with the --top pull.
-            --file: Use the given file rather than the local 
-                    .gitrepos file.
+            --choice: Use this value rather than waiting for user
+                      input when prompted to handle a difference
+                      in .gitrepos pin and current pin.
             -r: Recurse through our sub-repos and update them as well.
                 Any specified <dir>s and the argument to the --file
                 option will only apply to the top-level repository 
                 in which this command is being invoked.
+            --file: Use the given file rather than the local 
+                    .gitrepos file.
 
     publish: Safely pushes the current .gitrepos file.
              It iterates through the sub-repo list in the .gitrepos
@@ -270,7 +273,7 @@ function _rm {
 }
 
 function _update {
-    local ARGS DELETE REPOS REPO DIR REMOTE PIN CPIN COMMIT TOP REBASE RECURSE FILE=.gitrepos LINE CHOICE
+    local ARGS DELETE REPOS REPO DIR REMOTE PIN CPIN COMMIT TOP REBASE RECURSE FILE=.gitrepos LINE CHOICEOPT CHOICE
     
     local TOKENS TOKEN
     read -a TOKENS <<< "$@"
@@ -278,6 +281,7 @@ function _update {
 	case $TOKEN in
 	    --rebase) shift; ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
 	    --top) shift; ARGS="${ARGS[@]} $TOKEN"; TOP=1;;
+	    --choice=*) shift; ARGS="${ARGS[@]} $TOKEN"; CHOICEOPT=${TOKEN#--choice=};;
 	    -r) shift; ARGS="${ARGS[@]} $TOKEN"; RECURSE=1;;
 	    --file=*) shift; FILE=${TOKEN#--file=};;
 	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN" && return 1;;
@@ -407,9 +411,13 @@ function _update {
 		echo " s) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
 		echo " k) keep the current pin (make no changes)"
 		echo " o) overwrite the .gitrepos pin with the current pin"
-		read -u 10 CHOICE
+		if [[ -n $CHOICEOPT ]]; then
+		    CHOICE=$CHOICEOPT
+		else
+		    read -u 10 CHOICE
+		fi
 
-		case ${CHOICE:=k} in
+		case ${CHOICE:=s} in
 		    s)  ;;
 		    k)  continue;;
 		    o)  popd >/dev/null;
