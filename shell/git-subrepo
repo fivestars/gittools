@@ -360,39 +360,18 @@ function _update {
 	# If the sub-repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
 	    echo -e "\033[1;37;42m $DIR($PIN) -- $REMOTE \033[0m"
-	    if [[ -z $COMMIT ]]; then
-	        # If it's not a commit, we should be able to clone it
-	        # with the branch already checked out.
-		if ! git clone $REMOTE $DIR; then
-		    echo "Failed to clone sub-repo" >&2
+	    if ! git clone $REMOTE $DIR; then
+		echo "Failed to clone sub-repo" >&2
+		return 1
+	    fi
+	    
+	    if [[ -n $PIN ]]; then
+		pushd $DIR >/dev/null
+		if ! git checkout $PIN; then
+		    echo "Failed to checkout $PIN" >&2
 		    return 1
 		fi
-		if [[ -n $PIN ]]; then
-		    pushd $DIR >/dev/null
-		    if ! git checkout $PIN; then
-			echo "Failed to checkout $PIN" >&2
-			return 1
-		    fi
-		    popd >/dev/null
-		fi
-	    else
-		# Otherwise, we'll clone it normally, then checkout the commit.
-		if ! git clone $REMOTE $DIR; then
-		    echo "Failed to clone sub-repo" >&2
-		    return 1
-		fi
-		pwd
-		ls -l
-		echo $DIR
-		if [[ -n $PIN ]]; then
-		    pushd $DIR >/dev/null
-		    pwd
-		    if ! git checkout $PIN; then
-			echo "Failed to checkout $PIN" >&2
-			return 1
-		    fi
-		    popd >/dev/null
-		fi
+		popd >/dev/null
 	    fi
 	else
 	    # The sub-repo directory is already present. Navigate to it.
