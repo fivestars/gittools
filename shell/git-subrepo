@@ -8,7 +8,7 @@ Usage: git subrepo [list]
    or: git subrepo add [-r] [<dir>] <remote> [<pin>]
    or: git subrepo rm [-r] <dir1> <dir2>...
    or: git subrepo checkout <dir> [<pin>]
-   or: git subrepo update [--top] [--rebase] [--choice=s|k|o] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
+   or: git subrepo update [--top] [--rebase] [--pin=s|k|o] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
    or: git subrepo publish [-m <message>] [-p]
    or: git subrepo help
 
@@ -26,12 +26,16 @@ Files:
                        file).
                <remote>: The git url of the sub-repo. If this is a file://
                          url, it must be an absolute path.
-               <pin>: A branch or commit in the sub-repo.
+               <pin>: A branch, commit, or tag in the sub-repo.
                       git-subrepo will checkout this pin upon 'add' and
                       'update' and will use it as a basis for detecting
                       changes during other operations. If not present, 
                       git-subrepo will not monitor changes in that sub-repo
                       and expect that you are managing it manually.
+
+    .gitignore: git-subrepo attempts to keep the .gitignore file synchronized
+                with the .gitrepos entries. sub-repo directories will be
+                ignored.
 
 Operations:
     list: Lists the current sub-repos for this repository.
@@ -49,8 +53,8 @@ Operations:
          entry in the .gitrepos file and clone the repository
          to <dir>.
          If <pin> is given, the repository will be checked out to
-         that branch or commit, and it will be recorded in the 
-         sub-repo's .gitrepos entry.
+         <pin>, and it will be recorded in the sub-repo's .gitrepos
+         entry.
 
          -r: 'git subrepo update -r' the new sub-repo.
 
@@ -61,8 +65,8 @@ Operations:
             working directory as well.
 
     checkout: Checks out a sub-repo to the given <pin>. 
-              This branch or commit will be recorded in the sub-repo's
-              .gitrepos entry.
+              This pin will be recorded in the sub-repo's .gitrepos
+              entry.
               If no <pin> is given, the sub-repo's pin value will
               be cleared from the .gitrepos file.
 
@@ -75,16 +79,16 @@ Operations:
             continuing.
             If a the sub-repo has a pin in the .gitrepos file and
             it differs from the sub-repo's currently checked out
-            branch or commit, you will be given a choice of how
-            to handle it (switch, keep, overwrite).
+            pin, you will be given a choice of how to handle it:
+            switch, keep, overwrite.
 
             --top: Perform a pull on this top-level repo first.
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub-repos' origins.
                       Also used with the --top pull.
-            --choice: Use this value rather than waiting for user
-                      input when prompted to handle a difference
-                      in .gitrepos pin and current pin.
+            --pin: Use this value rather than waiting for user
+                   input when prompted to handle a difference
+                   in .gitrepos pin and current pin.
             -r: Recurse through our sub-repos and update them as well.
                 Any specified <dir>s and the argument to the --file
                 option will only apply to the top-level repository 
@@ -218,7 +222,7 @@ function _add {
 
     if [[ -n $PIN ]]; then
 	if ! git rev-list --quiet $PIN -- &>/dev/null; then
-	    echo "$PIN is not a valid branch or commit for this repository" >&2
+	    echo "$PIN is not a valid branch, commit, or tag for this repository" >&2
 	    return 1
 	fi
 	
@@ -281,7 +285,7 @@ function _update {
 	case $TOKEN in
 	    --rebase) shift; ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
 	    --top) shift; ARGS="${ARGS[@]} $TOKEN"; TOP=1;;
-	    --choice=*) shift; ARGS="${ARGS[@]} $TOKEN"; CHOICEOPT=${TOKEN#--choice=};;
+	    --pin=*) shift; ARGS="${ARGS[@]} $TOKEN"; CHOICEOPT=${TOKEN#--pin=};;
 	    -r) shift; ARGS="${ARGS[@]} $TOKEN"; RECURSE=1;;
 	    --file=*) shift; FILE=${TOKEN#--file=};;
 	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN" && return 1;;
