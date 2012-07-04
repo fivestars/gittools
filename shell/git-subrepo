@@ -111,6 +111,15 @@ Operations:
              -m: The commit message. Defaults to "Updating sub-repos"
 
     help: Displays this help message.
+
+General Options:
+    --color=<setting> : Controls whether special color control characters
+                        are written to stdout.
+                        
+                        auto: Default, let git-subrepo attempt to detect
+                              whether or not to output colors.
+                        yes: Force color output.
+                        no: Disable color output.
 "
 }
 
@@ -350,7 +359,7 @@ function _update {
 		    MESSAGE="$MESSAGE - local commits or stashed changes\n"
 
 		if [[ -n $MESSAGE ]]; then
-		    echo -e "\033[1;37;41m $DIR($PIN) -- $REMOTE \033[0m"
+		    echo -e "$(c '1;37;41') $DIR($PIN) -- $REMOTE $(c)"
 		    echo -e "Remote has changed for this sub-repo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this sub-repo directory and update again." >&2
 		    return 1
 		else
@@ -365,7 +374,7 @@ function _update {
 	
 	# If the sub-repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
-	    echo -e "\033[1;37;42m $DIR($PIN) -- $REMOTE \033[0m"
+	    echo -e "$(c '1;37;42') $DIR($PIN) -- $REMOTE $(c)"
 	    if ! git clone $REMOTE $DIR; then
 		echo "Failed to clone sub-repo" >&2
 		return 1
@@ -394,7 +403,7 @@ function _update {
 
 	    # If they differ, ask how we're expected to handle it.
 	    if [[ -n $PIN && $CPIN != $PIN ]]; then
-		echo -e "\033[1;37;41m $DIR($CPIN) -- $REMOTE \033[0m"
+		echo -e "$(c '1;37;41') $DIR($CPIN) -- $REMOTE $(c)"
 		echo "Your current pin does not match the specified sub-repo pin: $PIN"
 		echo "What would you like to do?"
 		echo " s) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
@@ -417,7 +426,7 @@ function _update {
 			return 1;;
 		esac
 	    else
-		echo -e "\033[30;47m $DIR($PIN) -- $REMOTE \033[0m"
+		echo -e "$(c '30;47') $DIR($PIN) -- $REMOTE $(c)"
 	    fi
 	    
 	    if ! git fetch; then
@@ -541,7 +550,7 @@ function _checkout {
     elif [[ -n $PIN ]]; then
 	REMOTE=$(echo $LINE | cut -d' ' -f2)
 	pushd $DIR >/dev/null
-	echo -e "\033[30;47m $DIR($PIN) -- $REMOTE \033[0m"
+	echo -e "$(c '30;47') $DIR($PIN) -- $REMOTE $(c)"
 	if git checkout $PIN; then
 	    if git branch | grep -q "(no branch)"; then
 		PIN="!!$PIN"
@@ -563,7 +572,7 @@ function _checkout {
 }
 
 function _list {
-    local DIR REMOTE PIN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END="\033[0m"
+    local DIR REMOTE PIN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END="$(c)"
     local FORMAT="%-20s %b%-15s %-15s%b %b%s%b\n"
     printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" ".gitrepos Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
     echo "------------------------------------------------------------------------------------"
@@ -572,7 +581,7 @@ function _list {
 	
 	if [[ ! -e $DIR ]]; then
 	    CPIN="(not present)"
-	    PIN_ERR_BEGIN="\033[1;37;41m"
+	    PIN_ERR_BEGIN=$(c '1;37;41')
 	    REM_ERR_BEGIN=
 	else
 	    pushd $DIR >/dev/null
@@ -584,8 +593,8 @@ function _list {
 	    else
 		CPIN=$BRANCH
 	    fi
-	    [[ -z $PIN ]] || [[ $PIN == $CPIN ]] && PIN_ERR_BEGIN= || PIN_ERR_BEGIN="\033[1;37;41m"
-	    git remote -v | grep -q "origin[[:space:]]\+$REMOTE" && REM_ERR_BEGIN= || REM_ERR_BEGIN="\033[1;37;41m"
+	    [[ -z $PIN ]] || [[ $PIN == $CPIN ]] && PIN_ERR_BEGIN= || PIN_ERR_BEGIN=$(c '1;37;41')
+	    git remote -v | grep -q "origin[[:space:]]\+$REMOTE" && REM_ERR_BEGIN= || REM_ERR_BEGIN=$(c '1;37;41')
 	    
 	    popd >/dev/null
 	fi
@@ -594,10 +603,31 @@ function _list {
     done < .gitrepos
 }
 
+function c {
+    [[ -n $COLOR ]] && echo "\e[${1:-0}m"
+}
+
+
+# Extract any general options
+ARGS=()
+[[ -t 0 ]] && COLOR=1 || COLOR= # Do our tty auto-detection for color output
+for TOKEN in "${@}"; do
+    case $TOKEN in
+	--color=*) 
+		case ${TOKEN#--color=} in
+		    auto) ;;
+		    yes) COLOR=1;;
+		    no) COLOR=;;
+		    *) echo "Invalid option: $TOKEN"; exit 1;;
+		esac;;
+	*) ARGS=(${ARGS[@]} "$TOKEN");; 
+    esac
+done
+
 # Move to the top-level git dir
 cd $(git rev-parse --show-toplevel)
 
-COMMAND=${1:-list}
+COMMAND=${ARGS:-list}
 case $COMMAND in
     # Require a .gitrepos file for these commands
     list|rm|update|publish|checkout) shift
@@ -605,12 +635,12 @@ case $COMMAND in
             echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&\2
             exit 1
         fi
-        _$COMMAND "${@}"
+        _$COMMAND "${ARGS[@]}"
         ;;
     
     # These do not require a .gitrepos file
     add|help|install|uninstall) shift
-        _$COMMAND "${@}"
+        _$COMMAND "${ARGS[@]}"
         ;;
     *)  echo "Unknown sub-repo command '$COMMAND'" >&2
         exit 1
