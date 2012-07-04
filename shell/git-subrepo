@@ -6,9 +6,10 @@ Usage: git subrepo [list]
    or: git subrepo install [--local] [--global] [--core]
    or: git subrepo uninstall [--local] [--global] [--core]
    or: git subrepo add [-r] [<dir>] <remote> [<pin>]
-   or: git subrepo rm [-r] <dir1> <dir2>...
+   or: git subrepo rm [-r] <dir1> [<dir2>...]
    or: git subrepo checkout <dir> [<pin>]
-   or: git subrepo update [--top] [--rebase] [--pin=s|k|o] [-r] [--file=<.gitrepos file>] [<dir1>] [<dir2>]...
+   or: git subrepo update [--top] [--rebase] [--pin=s|k|o] [-r] [--file=<.gitrepos file>] [<dir1> <dir2>]...
+   or: git subrepo foreach <command> [<dir1> <dir2>...]
    or: git subrepo publish [-m <message>] [-p]
    or: git subrepo help
 
@@ -110,6 +111,9 @@ Operations:
                  as if you had entered 'y'.
              -m: The commit message. Defaults to "Updating sub-repos"
 
+    foreach: Execute <command> for each sub-repo in the .gitrepos file or
+             for each <dir>.
+
     help: Displays this help message.
 
 General Options:
@@ -162,7 +166,7 @@ function _install {
 function _uninstall {
     local TOKENS TOKEN LOCAL GLOBAL CORE CHOICE
     [[ -z $@ ]] && LOCAL=2
-    read -a TOKENS <<< "$@"
+    read -a TOKENS <<< $@
     for TOKEN in ${TOKENS[@]}; do
 	case $TOKEN in
 	    --local) shift; LOCAL=1;;
@@ -291,7 +295,7 @@ function _update {
     local ARGS DELETE REPOS REPO DIR REMOTE PIN CPIN COMMIT TOP REBASE RECURSE FILE=.gitrepos LINE CHOICEOPT CHOICE
     
     local TOKENS TOKEN
-    read -a TOKENS <<< "$@"
+    read -a TOKENS <<< $@
     for TOKEN in ${TOKENS[@]}; do
 	case $TOKEN in
 	    --rebase) shift; ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
@@ -325,7 +329,7 @@ function _update {
 
     while read LINE; do
 	echo
-	read DIR REMOTE PIN <<< $(echo $LINE)
+	read DIR REMOTE PIN <<< ${LINE[@]}
 
 	# See if the sub-repo is pinned to a particular commit.
 	if [[ ${PIN:0:2} == "!!" ]]; then
@@ -467,7 +471,7 @@ function _update {
 		grep "^$REPO " $FILE
 	    done
         else
-	    cat $FILE
+	    cat $FILE | sed /^#/d
         fi)
 }
 
@@ -488,9 +492,13 @@ function _publish {
 	return 1
     fi
     
+    echo "Checking:"
+    echo "---------"
+    
     local DIR REMOTE PIN COMMIT
     while read LINE; do
-	read DIR REMOTE PIN <<< $(echo $LINE)
+	read DIR REMOTE PIN <<< ${LINE[@]}
+	echo "  $DIR"
 	if [[ ! -e $DIR ]]; then
 	    echo "Sub-repo directory does not exist locally. Try running 'git subrepo update' first." >&2
 	    return 1
@@ -523,7 +531,7 @@ function _publish {
 
 	popd >/dev/null
 
-    done < .gitrepos
+    done < .gitrepos | sed /^#/d
 
     if [[ -z $PUSH ]]; then
 	echo -n "Ready to commit and push. Continue? (Y/n) "
@@ -571,13 +579,40 @@ function _checkout {
     fi
 }
 
+function _foreach {
+    local TOKENS TOKEN FILE=.gitrepos
+    read -a TOKENS <<< $@
+    for TOKEN in ${TOKENS[@]}; do
+	case $TOKEN in
+	    --file=*) shift; FILE=${TOKEN#--file=};;
+	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN" && return 1;;
+	esac
+    done
+    COMMAND=$1; shift
+    REPOS="$@"
+
+    while read LINE; do
+	read DIR REMOTE PIN <<< ${LINE[@]}
+	pushd $DIR >/dev/null
+	eval $COMMAND
+	popd >/dev/null
+    done < <(
+	if [[ -n $REPOS ]]; then
+	    for REPO in ${REPOS[@]}; do
+		grep "^$REPO " $FILE
+	    done
+        else
+	    cat $FILE | sed /^#/d
+        fi)
+}
+
 function _list {
-    local DIR REMOTE PIN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END="$(c)"
+    local DIR REMOTE PIN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
     local FORMAT="%-20s %b%-15s %-15s%b %b%s%b\n"
     printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" ".gitrepos Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
     echo "------------------------------------------------------------------------------------"
     while read LINE; do
-	read DIR REMOTE PIN <<< $(echo $LINE)
+	read DIR REMOTE PIN <<< ${LINE[@]}
 	
 	if [[ ! -e $DIR ]]; then
 	    CPIN="(not present)"
@@ -600,7 +635,7 @@ function _list {
 	fi
 	
 	printf "$FORMAT" "$DIR" "$PIN_ERR_BEGIN" "${PIN:---}" "$CPIN" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
-    done < .gitrepos
+    done < .gitrepos | sed /^#/d
 }
 
 function c {
@@ -620,7 +655,7 @@ for TOKEN in "${@}"; do
 		    no) COLOR=;;
 		    *) echo "Invalid option: $TOKEN"; exit 1;;
 		esac;;
-	*) ARGS=(${ARGS[@]} "$TOKEN");; 
+	*) ARGS=("${ARGS[@]}" "$TOKEN");; 
     esac
 done
 
@@ -630,7 +665,7 @@ cd $(git rev-parse --show-toplevel)
 COMMAND=${ARGS:-list}
 case $COMMAND in
     # Require a .gitrepos file for these commands
-    list|rm|update|publish|checkout) shift
+    list|rm|update|publish|checkout|foreach) unset ARGS[0]
         if [[ ! -e .gitrepos ]]; then
             echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&\2
             exit 1
@@ -639,7 +674,7 @@ case $COMMAND in
         ;;
     
     # These do not require a .gitrepos file
-    add|help|install|uninstall) shift
+    add|help|install|uninstall) unset ARGS[0]
         _$COMMAND "${ARGS[@]}"
         ;;
     *)  echo "Unknown sub-repo command '$COMMAND'" >&2
