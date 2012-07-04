@@ -103,10 +103,12 @@ Operations:
              repository.
              You are then prompted to continue with the add-commit-push
              of the .gitrepos file.
+             This operation will not proceed unless the index (stage)
+             is clean.
 
              -p: The prompt will be suppressed, and it will proceed
                  as if you had entered 'y'.
-             -m: The commit message.
+             -m: The commit message. Defaults to "Updating sub-repos"
 
     help: Displays this help message.
 "
