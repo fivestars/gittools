@@ -2,41 +2,42 @@
 
 function _help {
     echo "\
-Usage: git subrepo [list]
-   or: git subrepo install [--local] [--global] [--core]
-   or: git subrepo uninstall [--local] [--global] [--core]
-   or: git subrepo add [-r] [<dir>] <remote> [<pin>]
-   or: git subrepo rm [-r] <dir1> [<dir2>...]
-   or: git subrepo checkout <dir> [<pin>]
-   or: git subrepo update [--top] [--rebase] [--pin=s|k|o] [-r] [--file=<.gitrepos file>] [<dir1> <dir2>]...
-   or: git subrepo foreach <command> [<dir1> <dir2>...]
-   or: git subrepo publish [-m <message>] [-p]
-   or: git subrepo help
+Usage: git subrepo [<general options>] [list]
+   or: git subrepo [<general options>] install [--local] [--global] [--core]
+   or: git subrepo [<general options>] uninstall [--local] [--global] [--core]
+   or: git subrepo [<general options>] add [--no-recurse] [(-p|--pin) <pin>] <repository> [<path>]
+   or: git subrepo [<general options>] rm [-d|--delete] [<path>...]
+   or: git subrepo [<general options>] checkout <path> [<pin>]
+   or: git subrepo [<general options>] update [-i <indent>] [--no-recurse] [--top] [--rebase] [--pin (s|k|o)] [<path>...]
+   or: git subrepo [<general options>] foreach <command> [<path>...]
+   or: git subrepo [<general options>] publish [-f] [-m <message>]
+   or: git subrepo [<general options>] help
 
 Files:
     .gitrepos: This is where git-subrepo stores its tracking information.
                Like .gitignore, it is intended to be committed like any
-               other file in your repository. Each line is an entry
-               that describes a sub-repo. The lines have the following
-               format:
-                   <path> <remote> [<pin>]
-
-               <path>: The filepath location of the cloned sub-repo.
-                       It is relative to the top-level directory of the
-                       parent repository (the one containing the .gitrepos
-                       file).
-               <remote>: The git url of the sub-repo. If this is a file://
-                         url, it must be an absolute path.
-               <pin>: A branch, commit, or tag in the sub-repo.
-                      git-subrepo will checkout this pin upon 'add' and
-                      'update' and will use it as a basis for detecting
-                      changes during other operations. If not present, 
-                      git-subrepo will not monitor changes in that sub-repo
-                      and expect that you are managing it manually.
+               other file in your repository. It follows the git config
+               file format and can be manipulated with git-config.
 
     .gitignore: git-subrepo attempts to keep the .gitignore file synchronized
                 with the .gitrepos entries. sub-repo directories will be
                 ignored.
+
+General Options:
+    -c|--color (auto|yes|no): Controls whether special color control characters
+                              are written to stdout.
+                        
+                              auto: Default, let git-subrepo attempt to detect
+                                    whether or not to output colors.
+                              yes: Force color output.
+                              no: Disable color output.
+
+    -f|--file: Use the given file rather than the local .gitrepos file. For
+               operations that recurse to sub-repos, this file is only
+               used for the top-level repo. The sub-repos will use their
+               standard .gitrepos file.
+
+    -q|--quiet: Suppress stdout output
 
 Operations:
     list: Lists the current sub-repos for this repository.
@@ -50,14 +51,18 @@ Operations:
 
     uninstall: Undoes the effects of 'install'.
 
-    add: Adds a new repository as a sub-repo. This will create an
-         entry in the .gitrepos file and clone the repository
-         to <dir>.
-         If <pin> is given, the repository will be checked out to
-         <pin>, and it will be recorded in the sub-repo's .gitrepos
-         entry.
-
-         -r: 'git subrepo update -r' the new sub-repo.
+    add: Adds a new repository as a sub-repo. This will clone the
+         repository to <path> and create an entry in the .gitrepos
+         file.
+ 
+         -p|--pin <pin>: The repository will be checked out to <pin>,
+                         and it will be recorded in the sub-repo's
+                         .gitrepos entry.
+         --no-recurse: By default, git-subrepo will recursively
+                       descend into the new sub-repo and perform
+                       a 'git-subrepo update' on them (also recursive).
+                       Use this if you only want to clone this
+                       new sub-repo.
 
     rm: Removes a sub-repo from this repository. This removes the
         sub-repo's entry from the .gitrepos file.
@@ -71,31 +76,30 @@ Operations:
               If no <pin> is given, the sub-repo's pin value will
               be cleared from the .gitrepos file.
 
-    update: Clones any new repositories found in the .gitrepos
-            file and pulls down any changes for the existing
-            sub-repos.
-            If the sub-repo's remote differs from the one specified
-            and there are unpushed changes in that sub-repo, you
-            will be prompted to resolve these changes before
-            continuing.
+    update: Clones any new repositories found in the .gitrepos file,
+            or just <path>... sub-repos if provided, and pulls down
+            any changes for the existing sub-repos.
+            If the sub-repo's remote repository differs from the
+            one in the .gitrepos file and there are unpushed changes
+            in  that sub-repo, you will be prompted to resolve these
+            changes before continuing.
             If a the sub-repo has a pin in the .gitrepos file and
             it differs from the sub-repo's currently checked out
             pin, you will be given a choice of how to handle it:
             switch, keep, overwrite.
 
+            --no-recurse: By default, git-subrepo will recursively
+                          descend into each sub-repo and perform a
+                          'git-subrepo update' on them (also recursive).
+                          Use this if you only want to update this
+                          top-level repo.
             --top: Perform a pull on this top-level repo first.
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub-repos' origins.
                       Also used with the --top pull.
-            --pin: Use this value rather than waiting for user
-                   input when prompted to handle a difference
-                   in .gitrepos pin and current pin.
-            -r: Recurse through our sub-repos and update them as well.
-                Any specified <dir>s and the argument to the --file
-                option will only apply to the top-level repository 
-                in which this command is being invoked.
-            --file: Use the given file rather than the local 
-                    .gitrepos file.
+            --pin (s|k|o): Use this value rather than waiting for user
+                           input when prompted to handle a difference
+                           in .gitrepos pin and current pin.
 
     publish: Safely pushes the current .gitrepos file.
              It iterates through the sub-repo list in the .gitrepos
@@ -107,31 +111,22 @@ Operations:
              This operation will not proceed unless the index (stage)
              is clean.
 
-             -p: The prompt will be suppressed, and it will proceed
+             -f: The prompt will be suppressed, and it will proceed
                  as if you had entered 'y'.
-             -m: The commit message. Defaults to "Updating sub-repos"
+             -m: The commit message. Defaults to 'Updating sub-repos'
 
     foreach: Execute <command> for each sub-repo in the .gitrepos file or
-             for each <dir>.
+             for each <path>.
 
     help: Displays this help message.
 
-General Options:
-    --color=<setting> : Controls whether special color control characters
-                        are written to stdout.
-                        
-                        auto: Default, let git-subrepo attempt to detect
-                              whether or not to output colors.
-                        yes: Force color output.
-                        no: Disable color output.
 "
 }
 
 function _install {
-    local TOKENS TOKEN LOCAL GLOBAL CORE CHOICE 
+    local TOKEN LOCAL GLOBAL CORE CHOICE
     [[ -z $@ ]] && LOCAL=2
-    read -a TOKENS <<< "$@"
-    for TOKEN in ${TOKENS[@]}; do
+    for TOKEN in "$@"; do
 	case $TOKEN in
 	    --local) shift; LOCAL=1;;
 	    --global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
@@ -164,10 +159,9 @@ function _install {
 }
 
 function _uninstall {
-    local TOKENS TOKEN LOCAL GLOBAL CORE CHOICE
+    local TOKEN LOCAL GLOBAL CORE CHOICE
     [[ -z $@ ]] && LOCAL=2
-    read -a TOKENS <<< $@
-    for TOKEN in ${TOKENS[@]}; do
+    for TOKEN in "$@"; do
 	case $TOKEN in
 	    --local) shift; LOCAL=1;;
 	    --global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
@@ -199,25 +193,26 @@ function _uninstall {
 }
 
 function _add {
-    local DIR REMOTE PIN RECURSE
-    local OPTARG OPTIND OPTERR OPT DELETE DIR
-    while getopts ":r" OPT; do
-	case $OPT in
-	    r) RECURSE=1;;
+    local TOKEN DIR URL CURL PIN RECURSE=1 COLOROPT="-c no"
+
+    for TOKEN in "$@"; do
+	[[ ${TOKEN:0:1} == '-' ]] && shift
+	case $TOKEN in
+	    --no-recurse) RECURSE=;;
+	    -p|--pin) PIN=$1; shift;;
+	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
     done
-    shift $((OPTIND-1))
 
-    if echo $1 | grep -q "\.git$"; then
-	read REMOTE PIN <<< $@
-	DIR=$(echo $REMOTE | sed 's/\(.*[:/]\|^\)\([^:/]\+\)\.git/\2/')
-    else
-	read DIR REMOTE PIN <<< $@
+    # See if <path> is supplied or not
+    read URL DIR <<< "$@"
+    if [[ -z $DIR ]]; then
+	DIR=$(echo $URL | sed 's/\(.*[:/]\|^\)\([^:/]\+\)\.git/\2/')
     fi
-    
-    touch .gitrepos
-    if grep -q "^$DIR " .gitrepos; then
-	echo "Sub-repo already exists as "$(grep "^$DIR " .gitrepos) >&2
+
+    touch $FILE
+    if CURL=$(git config --file $FILE subrepo.$DIR.url); then
+	echo "Sub-repo already exists as $CURL" >&2
 	return 1
     elif [[ -e $DIR ]]; then
 	echo "$DIR is already present. Move aside or choose another location for your sub-repo." >&2
@@ -225,38 +220,47 @@ function _add {
     fi
 
     # Prevent the use of relative file paths
-    if [[ ${REMOTE:0:1} != '/' && ${REMOTE:0:8} != 'file:///' && -e $REMOTE ]]; then
+    if [[ ${URL:0:1} != '/' && ${URL:0:8} != 'file:///' && -e $URL ]]; then
 	echo "Will not add a repository using a relative filepath" >&2
 	return 1
     fi
 
-    if ! git clone $REMOTE $DIR; then
+    if ! git clone $URL $DIR; then
 	echo "Failed to clone sub-repo" >&2
 	return 1
     fi
 
     if [[ -n $PIN ]]; then
-	if ! git rev-list --quiet $PIN -- &>/dev/null; then
-	    echo "$PIN is not a valid branch, commit, or tag for this repository" >&2
-	    return 1
-	fi
-	
 	# Attempt to checkout $PIN for this sub-repo
 	pushd $DIR >/dev/null
+
 	if ! git checkout $PIN; then
 	    echo "Failed to checkout $PIN" >&2
+	    popd >/dev/null
+	    rm -rf $DIR
 	    return 1
 	fi
+
+        if git branch | grep -q "(no branch)"; then
+	    PIN="!!$PIN"
+        fi
+
 	popd >/dev/null
     fi
     
-    echo $DIR $REMOTE $PIN >> .gitrepos
+    # Update .gitrepos
+    git config --file $FILE subrepo.$DIR.path $DIR
+    git config --file $FILE subrepo.$DIR.url $URL
+    [[ -n $PIN ]] && git config --file $FILE subrepo.$DIR.pin $PIN
+
+    # Update .gitignore
     echo /$DIR >> .gitignore
-    
+
     if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	echo "Recursing to $DIR"
 	pushd $DIR >/dev/null
-	if ! $BASH_SOURCE update -r; then
+	[[ -n $COLOR ]] && COLOROPT="-c yes"
+	if ! $BASH_SOURCE $COLOROPT update --prefix "$DIR($PIN)/"; then
 	    echo "Failed to update $DIR" >&2
 	    return 1
 	fi
@@ -265,23 +269,25 @@ function _add {
 }
 
 function _rm {
-    local OPTARG OPTIND OPTERR OPT DELETE DIR
-    while getopts ":r" OPT; do
-	case $OPT in
-	    r) DELETE=1;;
+    local TOKEN DELETE DIR
+
+    for TOKEN in "$@"; do
+	[[ ${TOKEN:0:1} == '-' ]] && shift
+	case $TOKEN in
+	    -d|--delete) DELETE=1;;
+	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
     done
-    shift $((OPTIND-1))
 
-    for DIR in $@; do
-	if grep -q "^$DIR " .gitrepos; then
+    for DIR in "$@"; do
+	if git config --file $FILE subrepo.$DIR.url &>/dev/null; then
 	    if [[ -n $DELETE ]]; then
 		echo "Removing sub-repo record and directory"
 		rm -rf $DIR
 	    else
 		echo "Removing sub-repo record, leaving directory"
 	    fi
-	    sed -i'' "/^$DIR /d;/^$/d" .gitrepos
+	    git config --file $FILE --remove-section subrepo.$DIR 2>/dev/null
 	    if [[ -e .gitignore ]]; then
 		sed -i'' "/^\/${DIR}$/d;/^$/d" .gitignore
 	    fi
@@ -292,27 +298,20 @@ function _rm {
 }
 
 function _update {
-    local ARGS DELETE REPOS REPO DIR REMOTE PIN CPIN COMMIT TOP REBASE RECURSE FILE=.gitrepos LINE CHOICEOPT CHOICE
-    
-    local TOKENS TOKEN
-    read -a TOKENS <<< $@
-    for TOKEN in ${TOKENS[@]}; do
+    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 PREFIX= CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN
+
+    for TOKEN in "$@"; do
+	[[ ${TOKEN:0:1} == '-' ]] && shift
 	case $TOKEN in
-	    --rebase) shift; ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
-	    --top) shift; ARGS="${ARGS[@]} $TOKEN"; TOP=1;;
-	    --pin=*) shift; ARGS="${ARGS[@]} $TOKEN"; CHOICEOPT=${TOKEN#--pin=};;
-	    -r) shift; ARGS="${ARGS[@]} $TOKEN"; RECURSE=1;;
-	    --file=*) shift; FILE=${TOKEN#--file=};;
-	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN" && return 1;;
+	    --rebase) ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
+	    --top) ARGS="${ARGS[@]} $TOKEN"; TOP=1;;
+	    -p|--pin) ARGS="${ARGS[@]} $TOKEN $1"; CHOICEOPT=$1; shift;;
+	    --no-recurse) ARGS="${ARGS[@]} $TOKEN"; RECURSE=;;
+	    --prefix) PREFIX=$1; shift;;
+	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
     done
     REPOS="$@"
-
-    # Make sure the .gitrepos file exists
-    if [[ ! -e $FILE ]]; then
-	echo "No such file or directory: $FILE" >&2
-	return 1
-    fi
 
     # Update the top-level repository, if requested
     if [[ -n $TOP ]]; then
@@ -327,9 +326,10 @@ function _update {
     # file.
     exec 10<&0
 
-    while read LINE; do
+    while read DIR; do
+	URL=$(git config --file $FILE subrepo.$DIR.url)
+	PIN=$(git config --file $FILE subrepo.$DIR.pin)
 	echo
-	read DIR REMOTE PIN <<< ${LINE[@]}
 
 	# See if the sub-repo is pinned to a particular commit.
 	if [[ ${PIN:0:2} == "!!" ]]; then
@@ -345,7 +345,7 @@ function _update {
 	    pushd $DIR >/dev/null
 	    
 	    # If we detect that the sub-repo's remote has changed, force a manual intervention.
-	    if ! git remote -v | grep -q "origin[[:space:]]\+$REMOTE"; then
+	    if ! git remote -v | grep -q "origin[[:space:]]\+$URL"; then
 		
 		# Fetch remote changes so we can compare to latest data.
 		if ! git fetch &>/dev/null; then
@@ -363,7 +363,7 @@ function _update {
 		    MESSAGE="$MESSAGE - local commits or stashed changes\n"
 
 		if [[ -n $MESSAGE ]]; then
-		    echo -e "$(c '1;37;41') $DIR($PIN) -- $REMOTE $(c)"
+		    echo -e "$(c '1;37;41')$PREFIX$DIR($PIN) -- $URL $(c)"
 		    echo -e "Remote has changed for this sub-repo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this sub-repo directory and update again." >&2
 		    return 1
 		else
@@ -378,8 +378,8 @@ function _update {
 	
 	# If the sub-repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
-	    echo -e "$(c '1;37;42') $DIR($PIN) -- $REMOTE $(c)"
-	    if ! git clone $REMOTE $DIR; then
+	    echo -e "$(c '1;37;42')$PREFIX$DIR($PIN) -- $URL $(c)"
+	    if ! git clone $URL $DIR; then
 		echo "Failed to clone sub-repo" >&2
 		return 1
 	    fi
@@ -407,7 +407,7 @@ function _update {
 
 	    # If they differ, ask how we're expected to handle it.
 	    if [[ -n $PIN && $CPIN != $PIN ]]; then
-		echo -e "$(c '1;37;41') $DIR($CPIN) -- $REMOTE $(c)"
+		echo -e "$(c '1;37;41')$PREFIX$DIR($CPIN) -- $URL $(c)"
 		echo "Your current pin does not match the specified sub-repo pin: $PIN"
 		echo "What would you like to do?"
 		echo " s) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
@@ -430,7 +430,7 @@ function _update {
 			return 1;;
 		esac
 	    else
-		echo -e "$(c '30;47') $DIR($PIN) -- $REMOTE $(c)"
+		echo -e "$(c '30;47')$PREFIX$DIR($PIN) -- $URL $(c)"
 	    fi
 	    
 	    if ! git fetch; then
@@ -443,13 +443,9 @@ function _update {
 		return 1
 	    fi
 	    
-	    # If we don't have a pin from the .gitrepos
-	    # file, go ahead and use the current checkout.
-	    PIN=${PIN:-$CPIN}
-
 	    # If we're on a branch and that branch has an upstream but we fail to pull
 	    if [[ -z $COMMIT ]] && git rev-parse @{u} &>/dev/null && ! git pull $REBASE; then
-		echo "Failed to merge changes from $PIN. Resolve these issues and update again" >&2
+		echo "Failed to merge changes from ${PIN:-$CPIN}. Resolve these issues and update again" >&2
 		return 1
 	    fi
 	    popd >/dev/null
@@ -459,7 +455,8 @@ function _update {
 	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	    echo "Recursing to $DIR"
 	    pushd $DIR >/dev/null
-	    if ! $BASH_SOURCE update ${ARGS[@]}; then
+	    [[ -n $COLOR ]] && COLOROPT="-c yes"
+	    if ! $BASH_SOURCE $COLOROPT update "${ARGS[@]}" --prefix "${PREFIX}$DIR($PIN)/"; then
 		echo "Failed to update $DIR" >&2
 		return 1
 	    fi
@@ -467,11 +464,15 @@ function _update {
 	fi
     done < <(
 	if [[ -n $REPOS ]]; then
-	    for REPO in ${REPOS[@]}; do 
-		grep "^$REPO " $FILE
+	    for REPO in ${REPOS[@]}; do
+		if git config --file $FILE subrepo.$REPO.url &> /dev/null; then
+		    echo $REPO
+		fi
 	    done
         else
-	    cat $FILE | sed /^#/d
+	    git config --file $FILE --list | \
+		grep "^subrepo\..*\.url=.*" | \
+		sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
         fi)
 }
 
@@ -479,10 +480,10 @@ function _publish {
     local MESSAGE="Updating sub-repos" PUSH
     
     local OPTARG OPTIND OPTERR OPT CHOICE
-    while getopts ":m:p" OPT; do
+    while getopts ":m:f" OPT; do
 	case $OPT in
 	    m) MESSAGE="$OPTARG";;
-	    p) PUSH=1;;
+	    f) PUSH=1;;
 	esac
     done
     shift $((OPTIND-1))
@@ -495,9 +496,10 @@ function _publish {
     echo "Checking:"
     echo "---------"
     
-    local DIR REMOTE PIN COMMIT
-    while read LINE; do
-	read DIR REMOTE PIN <<< ${LINE[@]}
+    local DIR URL PIN COMMIT
+    while read DIR; do
+	URL=$(git config --file $FILE subrepo.$DIR.url)
+	PIN=$(git config --file $FILE subrepo.$DIR.pin)
 	echo "  $DIR"
 	if [[ ! -e $DIR ]]; then
 	    echo "Sub-repo directory does not exist locally. Try running 'git subrepo update' first." >&2
@@ -519,19 +521,23 @@ function _publish {
 	
 	if [[ -n $COMMIT ]]; then
 	    if ! git branch -r --contains $PIN &>/dev/null; then
-		echo "$DIR reference $PIN not pushed to $REMOTE yet" >&2
+		echo "$DIR reference $PIN not pushed to $URL yet" >&2
 		return 1
 	    fi
 	elif [[ -n $PIN ]]; then
 	    if ! git branch -r | grep -q "origin/$PIN"; then
-		echo "$DIR branch $PIN does not exist on $REMOTE yet" >&2
+		echo "$DIR branch $PIN does not exist on $URL yet" >&2
 		return 1
 	    fi
 	fi
 
 	popd >/dev/null
 
-    done < .gitrepos | sed /^#/d
+    done < <(
+	git config --file $FILE --list | \
+	    grep "^subrepo\..*\.url=.*" | \
+	    sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
+    )
 
     if [[ -z $PUSH ]]; then
 	echo -n "Ready to commit and push. Continue? (Y/n) "
@@ -543,30 +549,32 @@ function _publish {
     fi
 
     # Let's do it.
-    git add .gitrepos .gitignore
+    git add $FILE .gitignore
     git commit -m "$MESSAGE"
     git push
 }
 
 function _checkout {
-    local DIR=$1 PIN=$2 REMOTE LINE 
+    local DIR=$1 PIN=$2 URL
 
-    if ! LINE=$(grep "^$DIR " .gitrepos); then
+    if ! URL=$(git config --file $FILE subrepo.$DIR.url); then
 	echo "Unknown sub-repo" >&2
+	return 1
     elif [[ ! -e $DIR ]]; then
 	echo "Could not find sub-repo at $DIR. Try using 'git subrepo add'" >&2
-    elif [[ -n $PIN ]]; then
-	REMOTE=$(echo $LINE | cut -d' ' -f2)
+	return 1
+    fi
+    
+    echo -e "$(c '30;47') $DIR($PIN) -- $URL $(c)"
+
+    if [[ -n $PIN ]]; then
 	pushd $DIR >/dev/null
-	echo -e "$(c '30;47') $DIR($PIN) -- $REMOTE $(c)"
-	if git checkout $PIN; then
-	    if git branch | grep -q "(no branch)"; then
+	if git fetch && git checkout $PIN; then
+            if git branch | grep -q "(no branch)"; then
 		PIN="!!$PIN"
-	    fi
+            fi
 	    popd >/dev/null
-	    
-	    REMOTE=$(echo $REMOTE | sed "s/\//\\\\\//g")
-	    sed -i "s/^$DIR .*/$DIR $REMOTE $PIN/" .gitrepos
+	    git config --file $FILE subrepo.$DIR.pin $PIN
 	else
 	    echo "Failed to checkout $PIN" >&2
 	    popd >/dev/null
@@ -574,46 +582,46 @@ function _checkout {
 	fi
 	echo
     else
-	REMOTE=$(echo $LINE | cut -d' ' -f2 | sed "s/\//\\\\\//g")
-	sed -i "s/^$DIR .*/$DIR $REMOTE/" .gitrepos
+	git config --file $FILE --unset subrepo.$DIR.pin
+	echo "No longer managing pin for $DIR"
     fi
 }
 
 function _foreach {
-    local TOKENS TOKEN FILE=.gitrepos
-    read -a TOKENS <<< $@
-    for TOKEN in ${TOKENS[@]}; do
-	case $TOKEN in
-	    --file=*) shift; FILE=${TOKEN#--file=};;
-	    *) [[ ${TOKEN:0:2} == "--" ]] && echo "Unknown option: $TOKEN" && return 1;;
-	esac
-    done
+    local COMMAND REPOS REPO DIR URL PIN
     COMMAND=$1; shift
     REPOS="$@"
 
-    while read LINE; do
-	read DIR REMOTE PIN <<< ${LINE[@]}
+    while read DIR; do
+	URL=$(git config --file $FILE subrepo.$DIR.url)
+	PIN=$(git config --file $FILE subrepo.$DIR.pin)
 	pushd $DIR >/dev/null
 	eval $COMMAND
 	popd >/dev/null
     done < <(
 	if [[ -n $REPOS ]]; then
 	    for REPO in ${REPOS[@]}; do
-		grep "^$REPO " $FILE
+		if git config --file $FILE subrepo.$REPO.url &> /dev/null; then
+		    echo $REPO
+		fi
 	    done
         else
-	    cat $FILE | sed /^#/d
+	    git config --file $FILE --list | \
+		grep "^subrepo\..*\.url=.*" | \
+		sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
         fi)
 }
 
 function _list {
-    local DIR REMOTE PIN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
+    local DIR URL PIN PINLEN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
     local FORMAT="%-20s %b%-15s %-15s%b %b%s%b\n"
-    printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" ".gitrepos Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Remote" "$ERR_END"
+    printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" "Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Url" "$ERR_END"
     echo "------------------------------------------------------------------------------------"
-    while read LINE; do
-	read DIR REMOTE PIN <<< ${LINE[@]}
 	
+    while read DIR; do
+	URL=$(git config --file $FILE subrepo.$DIR.url)
+	PIN=$(git config --file $FILE subrepo.$DIR.pin | sed s/!!//)
+
 	if [[ ! -e $DIR ]]; then
 	    CPIN="(not present)"
 	    PIN_ERR_BEGIN=$(c '1;37;41')
@@ -628,14 +636,29 @@ function _list {
 	    else
 		CPIN=$BRANCH
 	    fi
-	    [[ -z $PIN ]] || [[ $PIN == $CPIN ]] && PIN_ERR_BEGIN= || PIN_ERR_BEGIN=$(c '1;37;41')
-	    git remote -v | grep -q "origin[[:space:]]\+$REMOTE" && REM_ERR_BEGIN= || REM_ERR_BEGIN=$(c '1;37;41')
+
+	    if [[ -z $PIN ]] ||
+		{ COMMIT=$(git rev-parse $PIN) && [[ $COMMIT == $(git rev-parse $CPIN) ]]; }; then
+		PIN_ERR_BEGIN=
+	    else
+		PIN_ERR_BEGIN=$(c '1;37;41')
+	    fi
+
+	    if [[ -n $PIN ]]; then
+		[[ ${#CPIN} -lt ${#PIN} ]] && PIN=${PIN:0:${#CPIN}} || CPIN=${CPIN:0:${#PIN}}
+	    fi
+
+	    git remote -v | grep -q "origin[[:space:]]\+$URL" && REM_ERR_BEGIN= || REM_ERR_BEGIN=$(c '1;37;41')
 	    
 	    popd >/dev/null
 	fi
 	
-	printf "$FORMAT" "$DIR" "$PIN_ERR_BEGIN" "${PIN:---}" "$CPIN" "$ERR_END" "$REM_ERR_BEGIN" "$REMOTE" "$ERR_END"
-    done < .gitrepos | sed /^#/d
+	printf "$FORMAT" "$DIR" "$PIN_ERR_BEGIN" "${PIN:---}" "$CPIN" "$ERR_END" "$REM_ERR_BEGIN" "$URL" "$ERR_END"
+    done < <(
+	git config --file $FILE --list | \
+	    grep "^subrepo\..*\.url=.*" | \
+	    sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
+    )
 }
 
 function c {
@@ -644,38 +667,51 @@ function c {
 
 
 # Extract any general options
-ARGS=()
-[[ -t 0 ]] && COLOR=1 || COLOR= # Do our tty auto-detection for color output
-for TOKEN in "${@}"; do
+
+## Default configuration data
+FILE=.gitrepos
+
+## Do our tty auto-detection for color output
+[[ -t 1 ]] && COLOR=1 || COLOR=
+
+while [[ -n $@ ]]; do
+    TOKEN=$1
+    [[ ${TOKEN:0:1} == '-' ]] && shift || break
     case $TOKEN in
-	--color=*) 
-		case ${TOKEN#--color=} in
+	-c|--color)
+	        case $1 in
 		    auto) ;;
 		    yes) COLOR=1;;
 		    no) COLOR=;;
-		    *) echo "Invalid option: $TOKEN"; exit 1;;
-		esac;;
-	*) ARGS=("${ARGS[@]}" "$TOKEN");; 
+		    *) echo "Invalid option: $TOKEN $1" >&2; exit 1;;
+		esac
+		shift    
+		;;
+	-f|--file) FILE=$1; shift;;
+	-q|--quiet) exec 1>/dev/null;;
+	*) echo "Invalid option: $TOKEN" >&2; exit 1;;
     esac
 done
 
 # Move to the top-level git dir
 cd $(git rev-parse --show-toplevel)
 
-COMMAND=${ARGS:-list}
+COMMAND=${1:-list}
+shift
+
 case $COMMAND in
     # Require a .gitrepos file for these commands
-    list|rm|update|publish|checkout|foreach) unset ARGS[0]
-        if [[ ! -e .gitrepos ]]; then
-            echo "No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&\2
+    list|rm|update|publish|checkout|foreach)
+        if [[ ! -e $FILE ]]; then
+            echo "$FILE No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&\2
             exit 1
         fi
-        _$COMMAND "${ARGS[@]}"
+        _$COMMAND "$@"
         ;;
     
     # These do not require a .gitrepos file
-    add|help|install|uninstall) unset ARGS[0]
-        _$COMMAND "${ARGS[@]}"
+    add|help|install|uninstall)
+        _$COMMAND "$@"
         ;;
     *)  echo "Unknown sub-repo command '$COMMAND'" >&2
         exit 1
