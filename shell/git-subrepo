@@ -305,7 +305,7 @@ function _rm {
 	    fi
 	    git config --file $FILE --remove-section subrepo.$DIR 2>/dev/null
 	    if [[ -e .gitignore ]]; then
-		sed -i'' "\:^${DIR}$:d; /^$/d" .gitignore
+		sed -i'' "\|^${DIR}$|d; /^$/d" .gitignore
 	    fi
 	else
 	    echo "Unknown sub-repo" >&2
