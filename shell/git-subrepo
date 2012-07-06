@@ -5,10 +5,14 @@ function _help {
 Usage: git subrepo [<general options>] [list]
    or: git subrepo [<general options>] install [--local] [--global] [--core]
    or: git subrepo [<general options>] uninstall [--local] [--global] [--core]
-   or: git subrepo [<general options>] add [--no-recurse] [(-p|--pin) <pin>] <repository> [<path>]
+   or: git subrepo [<general options>] add [--no-recurse] [(-p|--pin) <pin>]
+                                       <repository> [<path>]
    or: git subrepo [<general options>] rm [-d|--delete] [<path>...]
    or: git subrepo [<general options>] checkout <path> [<pin>]
-   or: git subrepo [<general options>] update [-i <indent>] [--no-recurse] [--top] [--rebase] [--pin (s|k|o)] [<path>...]
+   or: git subrepo [<general options>] update [-i <indent>] [--no-recurse] 
+                                       [--no-command] [--top] [--rebase]
+                                       [(-p|--pin) (s|k|o)] [<path>...]
+   or: git subrepo [<general options>] postupdate [--set] [--clear] [<command>]
    or: git subrepo [<general options>] foreach <command> [<path>...]
    or: git subrepo [<general options>] publish [-f] [-m <message>]
    or: git subrepo [<general options>] help
@@ -93,6 +97,9 @@ Operations:
                           'git-subrepo update' on them (also recursive).
                           Use this if you only want to update this
                           top-level repo.
+            --no-command: By default, git-subrepo will execute any 
+                          command configured by postupdate. Prevent
+                          that behavior with this.
             --top: Perform a pull on this top-level repo first.
             --rebase: Perform a rebase rather than a merge when
                       pulling commits from the sub-repos' origins.
@@ -100,6 +107,15 @@ Operations:
             --pin (s|k|o): Use this value rather than waiting for user
                            input when prompted to handle a difference
                            in .gitrepos pin and current pin.
+
+    postupdate: Configures commands to be run after a successful update.
+                Call with no options or command to list the currently 
+                configured commands.
+                Call with <command> but no options to simply add a command
+                to the list.
+                --set: Replace all currently configured commands with
+                       the one provided on the command line.
+                --clear: Remove all currently configured commands.
 
     publish: Safely pushes the current .gitrepos file.
              It iterates through the sub-repo list in the .gitrepos
@@ -289,7 +305,7 @@ function _rm {
 	    fi
 	    git config --file $FILE --remove-section subrepo.$DIR 2>/dev/null
 	    if [[ -e .gitignore ]]; then
-			sed -i'' "/^$(echo $DIR | sed -e 's|/|\/|g')$/d;/^$/d" .gitignore
+		sed -i'' "\:^${DIR}$:d; /^$/d" .gitignore
 	    fi
 	else
 	    echo "Unknown sub-repo" >&2
@@ -298,7 +314,13 @@ function _rm {
 }
 
 function _update {
-    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 PREFIX= CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN
+    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 PREFIX= CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN COMMAND=1
+
+    # We need to save a reference to the outer stdin here since
+    # we want to read from the keyboard for user input and the
+    # while loop will have its own stdin for reading the .gitrepos
+    # file.
+    exec 10<&0
 
     for TOKEN in "$@"; do
 	[[ ${TOKEN:0:1} == '-' ]] && shift
@@ -307,6 +329,7 @@ function _update {
 	    --top) ARGS="${ARGS[@]} $TOKEN"; TOP=1;;
 	    -p|--pin) ARGS="${ARGS[@]} $TOKEN $1"; CHOICEOPT=$1; shift;;
 	    --no-recurse) ARGS="${ARGS[@]} $TOKEN"; RECURSE=;;
+	    --no-command) ARGS="${ARGS[@]} $TOKEN"; COMMAND=;;
 	    --prefix) PREFIX=$1; shift;;
 	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
@@ -319,12 +342,6 @@ function _update {
 	    return 1
 	fi
     fi
-
-    # We need to save a reference to the outer stdin here since 
-    # we want to read from the keyboard for user input and the 
-    # while loop will have its own stdin for reading the .gitrepos
-    # file.
-    exec 10<&0
 
     while read DIR; do
 	URL=$(git config --file $FILE subrepo.$DIR.url)
@@ -474,6 +491,13 @@ function _update {
 		grep "^subrepo\..*\.url=.*" | \
 		sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
         fi)
+
+    # Perform any post-update commands, if not suppressed
+    if [[ -n $COMMAND ]]; then
+	git config -f $FILE --get-all config.postupdate.command | while read COMMAND; do
+	    eval $COMMAND <&10
+	done
+    fi
 }
 
 function _publish {
@@ -584,6 +608,26 @@ function _checkout {
     else
 	git config --file $FILE --unset subrepo.$DIR.pin
 	echo "No longer managing pin for $DIR"
+    fi
+}
+
+function _postupdate {
+    local TOKEN COMMAND
+    for TOKEN in "$@"; do
+	[[ ${TOKEN:0:1} == '-' ]] && shift || break
+	case $TOKEN in
+	    --clear) git config --file $FILE --remove-section config.postupdate &>/dev/null; return;;
+	    --set) git config --file $FILE --remove-section config.postupdate &>/dev/null;;
+	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
+	esac
+    done
+    COMMAND="$@"
+
+    if [[ -n $COMMAND ]]; then
+	git config --file $FILE --add config.postupdate.command $(echo $COMMAND | md5sum | cut -d' ' -f1)
+	sed -i'' s/$(echo $COMMAND | md5sum | cut -d' ' -f1)/\""$COMMAND"\"/ $FILE
+    else
+	git config --file $FILE --get-all config.postupdate.command
     fi
 }
 
@@ -701,7 +745,7 @@ shift
 
 case $COMMAND in
     # Require a .gitrepos file for these commands
-    list|rm|update|publish|checkout|foreach)
+    list|rm|update|publish|checkout|postupdate|foreach)
         if [[ ! -e $FILE ]]; then
             echo "$FILE No sub-repos configured for this repository. Use 'git subrepo add' to get started." >&\2
             exit 1
