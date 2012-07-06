@@ -288,7 +288,6 @@ function _rm {
 		echo "Removing sub-repo record, leaving directory"
 	    fi
 	    git config --file $FILE --remove-section subrepo.$DIR 2>/dev/null
-
 	    if [[ -e .gitignore ]]; then
 			sed -i'' "/^$(echo $DIR | sed -e 's|/|\/|g')$/d;/^$/d" .gitignore
 	    fi
