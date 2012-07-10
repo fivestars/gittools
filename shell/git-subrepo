@@ -41,7 +41,12 @@ General Options:
                used for the top-level repo. The sub-repos will use their
                standard .gitrepos file.
 
-    -q|--quiet: Suppress stdout output
+    -q|--quiet: Suppress stdout output.
+
+    -r|--retry <num>: Attempt remote-related git commands up to <num> times.
+                      Wait 2 seconds before the second attempt, 4 before the 
+                      third, 8 before the fourth, and so on. Default value
+                      is 3.
 
 Operations:
     list: Lists the current sub-repos for this repository.
@@ -241,7 +246,7 @@ function _add {
 	return 1
     fi
 
-    if ! git clone $URL $DIR; then
+    if ! git__ clone $URL $DIR; then
 	echo "Failed to clone sub-repo" >&2
 	return 1
     fi
@@ -305,7 +310,7 @@ function _rm {
 	    fi
 	    git config --file $FILE --remove-section subrepo.$DIR 2>/dev/null
 	    if [[ -e .gitignore ]]; then
-		sed -i'' "\|^${DIR}$|d; /^$/d" .gitignore
+		sed -i'' "\|^/${DIR}$|d; /^$/d" .gitignore
 	    fi
 	else
 	    echo "Unknown sub-repo" >&2
@@ -338,7 +343,7 @@ function _update {
 
     # Update the top-level repository, if requested
     if [[ -n $TOP ]]; then
-	if ! git pull $REBASE; then
+	if ! git__ pull $REBASE; then
 	    return 1
 	fi
     fi
@@ -353,7 +358,7 @@ function _update {
 	    COMMIT=1
 	    PIN=${PIN:2}
 	fi
-
+	
 	# First, check to see if the remote has changed. If so, make sure to preserve any
 	# local, non-published changes. Otherwise, we can safely delete it and proceed
 	# as if it's a brand new sub-repo.
@@ -365,7 +370,7 @@ function _update {
 	    if ! git remote -v | grep -q "origin[[:space:]]\+$URL"; then
 		
 		# Fetch remote changes so we can compare to latest data.
-		if ! git fetch &>/dev/null; then
+		if ! git__ fetch &>/dev/null; then
 		    echo "Failed to fetch remote changes." >&2
 		    return 1
 		fi
@@ -396,7 +401,7 @@ function _update {
 	# If the sub-repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
 	    echo -e "$(c '1;37;42')$PREFIX$DIR($PIN) -- $URL $(c)"
-	    if ! git clone $URL $DIR; then
+	    if ! git__ clone $URL $DIR; then
 		echo "Failed to clone sub-repo" >&2
 		return 1
 	    fi
@@ -449,22 +454,30 @@ function _update {
 	    else
 		echo -e "$(c '30;47')$PREFIX$DIR($PIN) -- $URL $(c)"
 	    fi
-	    
-	    if ! git fetch; then
-		echo "Failed to fetch $PIN" >&2
+
+	    if ! git__ fetch; then
+		echo "Failed to fetch $DIR" >&2
 		return 1
 	    fi
 	    
-	    if [[ -n $PIN ]] && ! git checkout $PIN; then
-		echo "Failed to checkout $PIN" >&2
-		return 1
+	    if [[ -n $PIN && $PIN != $CPIN ]]; then
+		# We have a pin in the .gitrepos file, switch to it
+		git checkout $PIN || echo "Failed to checkout $PIN" >&2 return 1
 	    fi
-	    
-	    # If we're on a branch and that branch has an upstream but we fail to pull
-	    if [[ -z $COMMIT ]] && git rev-parse @{u} &>/dev/null && ! git pull $REBASE; then
-		echo "Failed to merge changes from ${PIN:-$CPIN}. Resolve these issues and update again" >&2
-		return 1
+
+	    if git rev-parse @{u} &>/dev/null; then
+		# We have an upstream, let's merge or rebase
+		if [[ -n $REBASE ]]; then
+		    git rebase origin/$CPIN || { "Failed to rebase to origin/$CPIN" >&2 && return 1; }
+		else
+		    git merge origin/$CPIN || { "Failed to merge from origin/$CPIN" >&2 && return 1; }
+		fi
+	    else
+		[[ -z $PIN ]] && echo "Doing nothing"
+		popd >/dev/null
+		continue;
 	    fi
+
 	    popd >/dev/null
 	fi
 
@@ -538,7 +551,7 @@ function _publish {
 	
 	pushd $DIR >/dev/null
 
-	if ! git fetch &>/dev/null; then
+	if ! git__ fetch &>/dev/null; then
 	    echo "Failed to fetch remote changes." >&2
 	    return 1
 	fi
@@ -575,7 +588,7 @@ function _publish {
     # Let's do it.
     git add $FILE .gitignore
     git commit -m "$MESSAGE"
-    git push
+    git__ push
 }
 
 function _checkout {
@@ -593,7 +606,7 @@ function _checkout {
 
     if [[ -n $PIN ]]; then
 	pushd $DIR >/dev/null
-	if git fetch && git checkout $PIN; then
+	if git__ fetch && git checkout $PIN; then
             if git branch | grep -q "(no branch)"; then
 		PIN="!!$PIN"
             fi
@@ -657,8 +670,8 @@ function _foreach {
 }
 
 function _list {
-    local DIR URL PIN PINLEN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
-    local FORMAT="%-20s %b%-15s %-15s%b %b%s%b\n"
+    local REPOS="$@" DIR URL PIN PINLEN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
+    local FORMAT="%-20s %b%-10s %-10s%b %b%s%b\n"
     printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" "Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Url" "$ERR_END"
     echo "------------------------------------------------------------------------------------"
 	
@@ -699,16 +712,34 @@ function _list {
 	
 	printf "$FORMAT" "$DIR" "$PIN_ERR_BEGIN" "${PIN:---}" "$CPIN" "$ERR_END" "$REM_ERR_BEGIN" "$URL" "$ERR_END"
     done < <(
-	git config --file $FILE --list | \
-	    grep "^subrepo\..*\.url=.*" | \
-	    sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
-    )
+	if [[ -n $REPOS ]]; then
+	    for REPO in ${REPOS[@]}; do
+		if git config --file $FILE subrepo.$REPO.url &> /dev/null; then
+		    echo $REPO
+		fi
+	    done
+        else
+	    git config --file $FILE --list | \
+		grep "^subrepo\..*\.url=.*" | \
+		sed 's/^subrepo\.\(.*\)\.url=.*/\1/g'
+        fi)
 }
 
 function c {
+    # Convenience function for colorization.
+    # No arguments implies ending colorization.
     [[ -n $COLOR ]] && echo "\e[${1:-0}m"
 }
 
+function git__ {
+    # Automatic retry, with increasing timeouts.
+    local WAIT=1 REM=$RETRY;
+    while [[ $REM -gt 1 ]] && ! git "$@"; do
+	sleep $((WAIT *= 2))
+	REM=$((REM - 1))
+    done
+    [[ $REM == 1 ]] && git "$@" || true
+}
 
 # Extract any general options
 
@@ -717,6 +748,9 @@ FILE=.gitrepos
 
 ## Do our tty auto-detection for color output
 [[ -t 1 ]] && COLOR=1 || COLOR=
+
+## Default number of git command attempts
+RETRY=3
 
 while [[ -n $@ ]]; do
     TOKEN=$1
@@ -733,6 +767,7 @@ while [[ -n $@ ]]; do
 		;;
 	-f|--file) FILE=$1; shift;;
 	-q|--quiet) exec 1>/dev/null;;
+	-r|--retry) RETRY=$1; shift;;
 	*) echo "Invalid option: $TOKEN" >&2; exit 1;;
     esac
 done
