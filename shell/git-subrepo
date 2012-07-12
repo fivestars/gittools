@@ -429,21 +429,22 @@ function _update {
 
 	    # If they differ, ask how we're expected to handle it.
 	    if [[ -n $PIN && $CPIN != $PIN ]]; then
-		echo -e "$(c '1;37;41')$PREFIX$DIR($CPIN) -- $URL $(c)"
-		echo "Your current pin does not match the specified sub-repo pin: $PIN"
-		echo "What would you like to do?"
-		echo " s) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
-		echo " k) keep the current pin (make no changes)"
-		echo " o) overwrite the .gitrepos pin with the current pin"
-		if [[ -n $CHOICEOPT ]]; then
-		    CHOICE=$CHOICEOPT
-		else
+		if [[ -z $CHOICEOPT ]]; then
+		    echo -e "$(c '1;37;41')$PREFIX$DIR($CPIN) -- $URL $(c)"
+		    echo "Your current pin does not match the specified sub-repo pin: $PIN"
+		    echo "What would you like to do?"
+		    echo " s) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
+		    echo " k) keep the current pin (make no changes)"
+		    echo " o) overwrite the .gitrepos pin with the current pin"
 		    read -u 10 CHOICE
+		else
+		    CHOICE=$CHOICEOPT
 		fi
-
+		
 		case ${CHOICE:=s} in
 		    s)  ;;
-		    k)  continue;;
+		    k)  popd >/dev/null;
+			continue;;
 		    o)  popd >/dev/null;
 			_checkout $DIR $CPIN;
 			pushd $DIR >/dev/null;
@@ -459,10 +460,11 @@ function _update {
 		echo "Failed to fetch $DIR" >&2
 		return 1
 	    fi
-	    
+
 	    if [[ -n $PIN && $PIN != $CPIN ]]; then
 		# We have a pin in the .gitrepos file, switch to it
 		git checkout $PIN || echo "Failed to checkout $PIN" >&2 return 1
+		CPIN=$PIN
 	    fi
 
 	    if git rev-parse @{u} &>/dev/null; then
@@ -652,6 +654,7 @@ function _foreach {
     while read DIR; do
 	URL=$(git config --file $FILE subrepo.$DIR.url)
 	PIN=$(git config --file $FILE subrepo.$DIR.pin)
+	echo -e "\n$(c '30;47')$DIR($PIN) -- $URL $(c)"
 	pushd $DIR >/dev/null
 	eval $COMMAND
 	popd >/dev/null
@@ -670,14 +673,15 @@ function _foreach {
 }
 
 function _list {
-    local REPOS="$@" DIR URL PIN PINLEN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
+    local REPOS="$@" DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR_BEGIN REM_ERR_BEGIN ERR_END=$(c)
     local FORMAT="%-20s %b%-10s %-10s%b %b%s%b\n"
     printf "$FORMAT" "Path" "$PIN_ERR_BEGIN" "Pin" "Current Pin" "$ERR_END" "$REM_ERR_BEGIN" "Url" "$ERR_END"
     echo "------------------------------------------------------------------------------------"
-	
+    
     while read DIR; do
 	URL=$(git config --file $FILE subrepo.$DIR.url)
-	PIN=$(git config --file $FILE subrepo.$DIR.pin | sed s/!!//)
+	PIN=$(git config --file $FILE subrepo.$DIR.pin)
+	echo $PIN | grep -q "^!!" && HASH=1
 
 	if [[ ! -e $DIR ]]; then
 	    CPIN="(not present)"
@@ -694,14 +698,18 @@ function _list {
 		CPIN=$BRANCH
 	    fi
 
-	    if [[ -z $PIN ]] ||
-		{ COMMIT=$(git rev-parse $PIN) && [[ $COMMIT == $(git rev-parse $CPIN) ]]; }; then
-		PIN_ERR_BEGIN=
-	    else
-		PIN_ERR_BEGIN=$(c '1;37;41')
+	    PIN_ERR_BEGIN=
+	    if [[ -n $PIN ]]; then
+		if [[ -n $HASH ]]; then
+		    if ! { COMMIT=$(git rev-parse $PIN) && [[ $COMMIT == $(git rev-parse $CPIN) ]]; }; then
+			PIN_ERR_BEGIN=$(c '1;37;41')
+		    fi
+		elif [[ $PIN != $CPIN ]]; then
+		    PIN_ERR_BEGIN=$(c '1;37;41')
+		fi
 	    fi
 
-	    if [[ -n $PIN ]]; then
+	    if [[ -n $HASH && -n $PIN ]]; then
 		[[ ${#CPIN} -lt ${#PIN} ]] && PIN=${PIN:0:${#CPIN}} || CPIN=${CPIN:0:${#PIN}}
 	    fi
 
@@ -734,11 +742,13 @@ function c {
 function git__ {
     # Automatic retry, with increasing timeouts.
     local WAIT=1 REM=$RETRY;
-    while [[ $REM -gt 1 ]] && ! git "$@"; do
+    while [[ $REM -gt 1 ]] && ! git "$@" 2>/dev/null; do
 	sleep $((WAIT *= 2))
 	REM=$((REM - 1))
     done
-    [[ $REM == 1 ]] && git "$@" || true
+    if [[ $REM == 1 ]]; then
+	git "$@"
+    fi	
 }
 
 # Extract any general options
