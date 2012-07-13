@@ -51,9 +51,9 @@ function ps1-git() {
 	    local REFHASH=${REFLOG%% *}
 	    local REFNAME=${REFLOG##* }
 	    if [[ ${REFNAME:0:${#REFHASH}} == ${REFHASH} ]]; then
-		BRANCH="(detached from ${REFHASH})"
+		BRANCH="(detached at ${REFHASH})"
 	    else
-		BRANCH="(detached from ${REFNAME})"
+		BRANCH="(detached at ${REFNAME})"
 	    fi
 	fi
 
@@ -80,8 +80,8 @@ function ps1-git() {
 	
 	# Display any divergence from our upstream branch
 	if [[ -n $UPSTREAM && -n $BRANCH ]] && echo $BRANCH | grep -vq '(.*)'; then
-	    local BEHIND=$(git rev-list ^$BRANCH $UPSTREAM | wc -l)
-	    local AHEAD=$(git rev-list $BRANCH ^$UPSTREAM | wc -l)
+	    local BEHIND=$(git rev-list ^refs/heads/$BRANCH $UPSTREAM | wc -l)
+	    local AHEAD=$(git rev-list refs/heads/$BRANCH ^$UPSTREAM | wc -l)
 
 	    [[ $BEHIND != 0 ]] && STATII=( "${STATII[*]}" "${BEHIND}v" )
 	    [[ $AHEAD != 0 ]] && STATII=( "${STATII[*]}" "${AHEAD}^" )
