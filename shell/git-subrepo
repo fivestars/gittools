@@ -736,7 +736,7 @@ function _list {
 function c {
     # Convenience function for colorization.
     # No arguments implies ending colorization.
-    [[ -n $COLOR ]] && echo "\e[${1:-0}m"
+    [[ -n $COLOR ]] && echo -en "\033[${1:-0}m"
 }
 
 function git__ {
