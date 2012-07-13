@@ -6,7 +6,7 @@
 #
 # Example (in .bashrc):
 # . /path/to/ps1-git.sh # use some sort of non-relative path
-# export PS1='\n\u\[\e[1;37m\]@\[\e[1;36m\]\h:\[\e[1;33m\]\w $(ps1-git -l -s"|")\[\e[1;37m\]\n$\[\e[0m\] '
+# export PS1='\n\u\[\033[1;37m\]@\[\033[1;36m\]\h:\[\033[1;33m\]\w $(ps1-git -l -s"|")\[\033[1;37m\]\n$\[\033[0m\] '
 
 # Display the current git branch status information
 function ps1-git() {
@@ -14,7 +14,7 @@ function ps1-git() {
     # Record the state of the last command-line command
     RESULT=$?
 
-    local LAZY SHORT BEFORE='\e[1;37m' BEFORE_STALE='\e[0;37m' AFTER AFTER_STALE STALE GIT_DIR
+    local LAZY SHORT BEFORE='\033[1;37m' BEFORE_STALE='\033[0;37m' AFTER AFTER_STALE STALE GIT_DIR
     local OPTIND OPTARG OPTERR OPT
     while getopts :ls:c:b:B:a:A: OPT; do
 	case $OPT in
