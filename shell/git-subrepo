@@ -455,7 +455,6 @@ function git-subrepo.update {
 			echo " s) display the git status of the sub-repo"
 			read -u 10 CHOICE
 			if [[ "$CHOICE" == "s" ]]; then
-			    CHOICE=
 			    echo
 			    git status
 			    echo
