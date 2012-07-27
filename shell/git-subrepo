@@ -444,10 +444,10 @@ function git-subrepo.update {
 	    # If they differ, ask how we're expected to handle it.
 	    if [[ -n $PIN && $CPIN != $PIN ]]; then
 		if [[ -z $CHOICEOPT ]]; then
-		    CHOICE=
+		    CHOICE="s"
 		    echo "${RED}$PREFIX$DIR($CPIN) -- $URL ${CLEAR}"
 		    echo "Your current pin does not match the specified sub-repo pin: $PIN"
-		    while [[ -z $CHOICE ]]; do
+		    while [[ $CHOICE == "s" ]]; do
 			echo "What would you like to do?"
 			echo " c) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
 			echo " k) keep the current pin (make no changes)"
