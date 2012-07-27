@@ -465,8 +465,8 @@ function git-subrepo.update {
 		    CHOICE=$CHOICEOPT
 		fi
 		
-		case ${CHOICE:=s} in
-		    s)  ;;
+		case ${CHOICE:=c} in
+		    c)  ;;
 		    k)  popd >/dev/null;
 			continue;;
 		    o)  popd >/dev/null;
