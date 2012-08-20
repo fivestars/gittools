@@ -163,12 +163,12 @@ function git-subrepo.install {
     done
     
     if [[ -n $LOCAL ]]; then
-	git config alias.subrepo "!$(readlink -f $BASH_SOURCE)" && \
+	git config alias.subrepo "!$BASH_SOURCE_FULL" && \
 	    echo "Added to your repository's aliases."
     fi
 
     if [[ -n $GLOBAL ]]; then
-	git config --global alias.subrepo "!$(readlink -f $BASH_SOURCE)" && \
+	git config --global alias.subrepo "!$BASH_SOURCE_FULL" && \
 	    echo "Added to your global aliases."
     fi
 
@@ -292,7 +292,6 @@ function git-subrepo.add {
     # Recurse to this sub-repo if it has a .gitrepos file
     if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	echo "Recursing to $DIR"
-	BASH_SOURCE_FULL=$(readlink -f $BASH_SOURCE)
 	pushd $DIR >/dev/null
 	[[ -n $COLOR ]] && COLOROPT="-c yes"
 	if ! $BASH_SOURCE_FULL $COLOROPT update --prefix "$DIR$DPIN/"; then
@@ -803,7 +802,6 @@ function git-subrepo.list {
 
         # Recurse to this sub-repo if it has a .gitrepos file
 	if [[ -e $DIR/.gitrepos ]]; then
-	    BASH_SOURCE_FULL=$(readlink -f $BASH_SOURCE)
 	    pushd $DIR >/dev/null
 	    [[ -n $COLOR ]] && COLOROPT="-c yes"
 	    $BASH_SOURCE_FULL $COLOROPT list --indent $((INDENT + 2)) "${ARGS[@]}"
@@ -839,6 +837,9 @@ function git__ {
 	git "$@"
     fi	
 }
+
+# Store the full path of this file
+BASH_SOURCE_FULL=$(cd $(dirname $BASH_SOURCE) && pwd)/$(basename $BASH_SOURCE)
 
 # Extract any general options
 
