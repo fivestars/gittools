@@ -3,7 +3,7 @@
 
 function git-subrepo.help {
     echo "\
-Usage: git subrepo [<general options>] [list]
+Usage: git subrepo [<general options>] [list [-v|--verbose]]
    or: git subrepo [<general options>] install [--local] [--global] [--core]
    or: git subrepo [<general options>] uninstall [--local] [--global] [--core]
    or: git subrepo [<general options>] add [--no-recurse] [-f|--force] [(-p|--pin) <pin>]
@@ -51,6 +51,7 @@ General Options:
 
 Operations:
     list: Lists the current sub-repos for this repository.
+             -v|--verbose: Displays the sub-repo's remote URL as well
 
     install: Installs 'git-subrepo' into any of three locations.
              --local: The repository's aliases (default)
@@ -288,12 +289,13 @@ function git-subrepo.add {
     # Update .gitignore
     echo /$DIR >> .gitignore
 
+    # Recurse to this sub-repo if it has a .gitrepos file
     if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	echo "Recursing to $DIR"
 	BASH_SOURCE_FULL=$(readlink -f $BASH_SOURCE)
 	pushd $DIR >/dev/null
 	[[ -n $COLOR ]] && COLOROPT="-c yes"
-	if ! $BASH_SOURCE_FULL $COLOROPT update --prefix "$DIR($PIN)/"; then
+	if ! $BASH_SOURCE_FULL $COLOROPT update --prefix "$DIR$DPIN/"; then
 	    echo "Failed to update $DIR" >&2
 	    return 1
 	fi
@@ -331,7 +333,7 @@ function git-subrepo.rm {
 }
 
 function git-subrepo.update {
-    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 PREFIX CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN COMMAND=1
+    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 FORMAT PREFIX INDENT CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN DPIN COMMAND=1
 
     # We need to save a reference to the outer stdin here since
     # we want to read from the keyboard for user input and the
@@ -350,11 +352,14 @@ function git-subrepo.update {
 	    --no-command) ARGS="${ARGS[@]} $TOKEN"; COMMAND=;;
 	    --prefix) PREFIX=$1; shift;;
 	    --prefix=*) PREFIX=${TOKEN#*=};;
+	    --indent) INDENT=$1; shift;;
+	    --indent=*) INDENT=${TOKEN#*=};;
 	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
     done
     REPOS="$@"
 
+    FORMAT="%${INDENT}s%b%s%s%s -- %s %b\n"
     # Update the top-level repository, if requested
     if [[ -n $TOP ]]; then
 	if ! git__ pull $REBASE; then
@@ -365,6 +370,7 @@ function git-subrepo.update {
     while read DIR; do
 	URL=$(git config --file $FILE subrepo.$DIR.url)
 	PIN=$(git config --file $FILE subrepo.$DIR.pin)
+	[[ -n $PIN ]] && DPIN="($PIN)"
 	echo
 
 	# See if the sub-repo is pinned to a particular commit.
@@ -385,7 +391,7 @@ function git-subrepo.update {
 		
 		# Fetch remote changes so we can compare to latest data.
 		if ! git__ fetch &>/dev/null; then
-		    echo "Failed to fetch remote changes." >&2
+		    printf "%${INDENT}sFailed to fetch remote changes.\n" >&2
 		    return 1
 		fi
 		local MESSAGE=""
@@ -399,8 +405,8 @@ function git-subrepo.update {
 		    MESSAGE="$MESSAGE - local commits or stashed changes\n"
 
 		if [[ -n $MESSAGE ]]; then
-		    echo -e "${RED}$PREFIX$DIR($PIN) -- $URL ${CLEAR}"
-		    echo -e "Remote has changed for this sub-repo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this sub-repo directory and update again." >&2
+		    printf "$FORMAT" "" "$RED" "$PREFIX" "$DIR" "$DPIN" "$URL" "$CLEAR"			
+		    printf "%${INDENT}sRemote has changed for this sub-repo and unpublished local changes were found.\n${MESSAGE}Resolve these before continuing, or just delete this sub-repo directory and update again.\n" >&2
 		    return 1
 		else
 		    # It's safe to switch to the new remote, so delete the current sub-repo.
@@ -414,16 +420,16 @@ function git-subrepo.update {
 	
 	# If the sub-repo directory doesn't exist, we must clone it down now
 	if [[ ! -e $DIR ]]; then
-	    echo -e "${GREEN}$PREFIX$DIR($PIN) -- $URL ${CLEAR}"
+	    printf "$FORMAT" "" "$GREEN" "$PREFIX" "$DIR" "$DPIN" "$URL" "$CLEAR"
 	    if ! git__ clone $URL $DIR; then
-		echo "Failed to clone sub-repo" >&2
+		printf "%${INDENT}sFailed to clone sub-repo\n" >&2
 		return 1
 	    fi
 	    
 	    if [[ -n $PIN ]]; then
 		pushd $DIR >/dev/null
 		if ! git checkout $PIN; then
-		    echo "Failed to checkout $PIN" >&2
+		    printf "%${INDENT}sFailed to checkout $PIN\n" >&2
 		    return 1
 		fi
 		popd >/dev/null
@@ -445,14 +451,15 @@ function git-subrepo.update {
 	    if [[ -n $PIN && $CPIN != $PIN ]]; then
 		if [[ -z $CHOICEOPT ]]; then
 		    CHOICE="s"
-		    echo "${RED}$PREFIX$DIR($CPIN) -- $URL ${CLEAR}"
-		    echo "Your current pin does not match the specified sub-repo pin: $PIN"
+		    DPIN="($CPIN)"
+		    printf "$FORMAT" "" "$RED" "$PREFIX" "$DIR" "$DPIN" "$URL" "$CLEAR"
+		    printf "%${INDENT}sYour current pin does not match the specified sub-repo pin: $PIN\n"
 		    while [[ $CHOICE == "s" ]]; do
-			echo "What would you like to do?"
-			echo " c) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)"
-			echo " k) keep the current pin (make no changes)"
-			echo " o) overwrite the .gitrepos pin with the current pin"
-			echo " s) display the git status of the sub-repo"
+			printf "%${INDENT}sWhat would you like to do?\n"
+			printf "%${INDENT}s c) switch to the specified sub-repo pin (default, will checkout the sub-repo to the .gitrepos pin)\n"
+			printf "%${INDENT}s k) keep the current pin (make no changes)\n"
+			printf "%${INDENT}s o) overwrite the .gitrepos pin with the current pin\n"
+			printf "%${INDENT}s s) display the git status of the sub-repo\n"
 			read -u 10 CHOICE
 			if [[ "$CHOICE" == "s" ]]; then
 			    echo
@@ -472,33 +479,33 @@ function git-subrepo.update {
 			_checkout $DIR $CPIN;
 			pushd $DIR >/dev/null;
 			continue;;
-		    *)  echo "Invalid choice: $CHOICE. Stopping." >&2;
+		    *)  printf "%${INDENT}sInvalid choice: $CHOICE. Stopping.\n" >&2;
 			return 1;;
 		esac
 	    else
-		echo -e "${GRAY}$PREFIX$DIR($PIN) -- $URL ${CLEAR}"
+		printf "$FORMAT" "" "$GRAY" "$PREFIX" "$DIR" "$DPIN" "$URL" "$CLEAR"
 	    fi
 
 	    if ! git__ fetch; then
-		echo "Failed to fetch $DIR" >&2
+		printf "%${INDENT}sFailed to fetch $DIR\n" >&2
 		return 1
 	    fi
 
 	    if [[ -n $PIN && $PIN != $CPIN ]]; then
 		# We have a pin in the .gitrepos file, switch to it
-		git checkout $PIN || echo "Failed to checkout $PIN" >&2 return 1
+		git checkout $PIN || printf "%${INDENT}sFailed to checkout $PIN\n" >&2 return 1
 		CPIN=$PIN
 	    fi
 
 	    if git rev-parse @{u} &>/dev/null; then
 		# We have an upstream, let's merge or rebase
 		if [[ -n $REBASE ]]; then
-		    git rebase origin/$CPIN || { "Failed to rebase to origin/$CPIN" >&2 && return 1; }
+		    git rebase origin/$CPIN || { printf "%${INDENT}sFailed to rebase to origin/$CPIN\n" >&2 && return 1; }
 		else
-		    git merge origin/$CPIN || { "Failed to merge from origin/$CPIN" >&2 && return 1; }
+		    git merge origin/$CPIN || { printf "%${INDENT}sFailed to merge from origin/$CPIN\n" >&2 && return 1; }
 		fi
 	    else
-		[[ -z $PIN ]] && echo "Doing nothing"
+		[[ -z $PIN ]] && printf "%${INDENT}sDoing nothing\n"
 		popd >/dev/null
 		continue;
 	    fi
@@ -508,11 +515,11 @@ function git-subrepo.update {
 
         # Recurse to this sub-repo if it has a .gitrepos file
 	if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
-	    echo "Recursing to $DIR"
+	    printf "%${INDENT}sRecursing to $DIR\n"
 	    pushd $DIR >/dev/null
 	    [[ -n $COLOR ]] && COLOROPT="-c yes"
-	    if ! $BASH_SOURCE $COLOROPT update "${ARGS[@]}" --prefix "${PREFIX}$DIR($PIN)/"; then
-		echo "Failed to update $DIR" >&2
+	    if ! $BASH_SOURCE $COLOROPT update "${ARGS[@]}" --prefix "${PREFIX}$DIR/" --indent $((INDENT + 2)); then
+		printf "%${INDENT}sFailed to update $DIR\n" >&2
 		return 1
 	    fi
 	    popd >/dev/null
