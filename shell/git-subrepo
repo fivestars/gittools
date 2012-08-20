@@ -29,13 +29,13 @@ Files:
                 ignored.
 
 General Options:
-    -c|--color (auto|yes|no): Controls whether special color control characters
+    -c|--color (a|auto|y|yes|n|no): Controls whether special color control characters
                               are written to stdout.
                         
-                              auto: Default, let git-subrepo attempt to detect
+                              a|auto: Default, let git-subrepo attempt to detect
                                     whether or not to output colors.
-                              yes: Force color output.
-                              no: Disable color output.
+                              y|yes: Force color output.
+                              n|no: Disable color output.
 
     -f|--file: Use the given file rather than the local .gitrepos file. For
                operations that recurse to sub-repos, this file is only
@@ -162,13 +162,12 @@ function git-subrepo.install {
     done
     
     if [[ -n $LOCAL ]]; then
-	git config alias.subrepo '!$(git rev-parse --show-toplevel)/git-subrepo' && \
+	git config alias.subrepo "!$(readlink -f $BASH_SOURCE)" && \
 	    echo "Added to your repository's aliases."
     fi
 
     if [[ -n $GLOBAL ]]; then
-	echo "!$(git rev-parse --show-toplevel)/git-subrepo" && \
-	git config --global alias.subrepo "!$(git rev-parse --show-toplevel)/git-subrepo" && \
+	git config --global alias.subrepo "!$(readlink -f $BASH_SOURCE)" && \
 	    echo "Added to your global aliases."
     fi
 
@@ -291,9 +290,10 @@ function git-subrepo.add {
 
     if [[ -n $RECURSE && -e $DIR/.gitrepos ]]; then
 	echo "Recursing to $DIR"
+	BASH_SOURCE_FULL=$(readlink -f $BASH_SOURCE)
 	pushd $DIR >/dev/null
 	[[ -n $COLOR ]] && COLOROPT="-c yes"
-	if ! $BASH_SOURCE $COLOROPT update --prefix "$DIR($PIN)/"; then
+	if ! $BASH_SOURCE_FULL $COLOROPT update --prefix "$DIR($PIN)/"; then
 	    echo "Failed to update $DIR" >&2
 	    return 1
 	fi
@@ -331,7 +331,7 @@ function git-subrepo.rm {
 }
 
 function git-subrepo.update {
-    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 PREFIX= CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN COMMAND=1
+    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 PREFIX CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN COMMAND=1
 
     # We need to save a reference to the outer stdin here since
     # we want to read from the keyboard for user input and the
@@ -349,7 +349,7 @@ function git-subrepo.update {
 	    --no-recurse) ARGS="${ARGS[@]} $TOKEN"; RECURSE=;;
 	    --no-command) ARGS="${ARGS[@]} $TOKEN"; COMMAND=;;
 	    --prefix) PREFIX=$1; shift;;
-	    --prefix=*) ARGS="${ARGS[@]} $TOKEN"; CHOICEOPT=${TOKEN#*=};;
+	    --prefix=*) PREFIX=${TOKEN#*=};;
 	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
 	esac
     done
@@ -706,8 +706,23 @@ function git-subrepo.foreach {
 }
 
 function git-subrepo.list {
-    local REPOS="$@" DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR REM_ERR BRANCH REFLOG REFHASH REFNAME COUNT=0
-    local FORMAT="%-20s %b%-10s %-10s%b %b%s%b\n"
+    local REPOS FORMAT DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR REM_ERR BRANCH REFLOG REFHASH REFNAME COUNT=0 ARGS VERBOSE INDENT
+
+    for TOKEN in "$@"; do
+	shopt -s extglob
+	TOKEN=${TOKEN##+([[:space:]])}
+	shopt -u extglob
+	[[ ${TOKEN:0:1} == '-' ]] && shift
+	case ${TOKEN} in
+	    -v|--verbose) ARGS="${ARGS[@]} $TOKEN"; VERBOSE=1;;
+	    --indent) INDENT=$1; shift;;
+	    --indent=*) INDENT=${TOKEN#*=};;
+	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
+	esac
+    done
+    REPOS="$@"
+
+    FORMAT="%${INDENT}s%-$((20-INDENT))s %b%-11s %-11s%b %b%s%b\n"
 
     BRANCH=$(git branch | grep '^*' | sed 's/* //')
     if [[ "$BRANCH" == "(no branch)" ]]; then
@@ -723,13 +738,19 @@ function git-subrepo.list {
     
     COUNT=$(git config --file $FILE --list | grep "^subrepo\..*\.path=" | wc -l)
 
-    echo
-    echo "Current Branch: ${BRANCH}"
-    echo "Number of sub-repos: ${COUNT}"
-    echo
-    printf "$FORMAT" "Path" "$PIN_ERR" "Pin" "Current Pin" "$CLEAR" "$REM_ERR" "Url" "$CLEAR"
-    echo "------------------------------------------------------------------------------------"
-    
+    if [[ -z $INDENT ]]; then
+	printf "\n%${INDENT}sCurrent Branch: ${BRANCH}\n"
+	printf "%${INDENT}sNumber of sub-repos: ${COUNT}\n\n"
+	if [[ -z $VERBOSE ]]; then
+	    printf "$FORMAT" "" "Path" "$PIN_ERR" "Pin" "Current Pin" "$CLEAR"
+	    printf "%${INDENT}s--------------------------------------------\n"
+	else
+	    printf "$FORMAT" "" "Path" "$PIN_ERR" "Pin" "Current Pin" "$CLEAR" "$REM_ERR" "Url" "$CLEAR"
+	    printf "%${INDENT}s------------------------------------------------------------------------------------\n"
+	fi
+	
+    fi
+
     while read DIR; do
 	URL=$(git config --file $FILE subrepo.$DIR.url)
 	PIN=$(git config --file $FILE subrepo.$DIR.pin)
@@ -766,11 +787,22 @@ function git-subrepo.list {
 	    fi
 
 	    git remote -v | grep -q "origin[[:space:]]\+$URL" && REM_ERR= || REM_ERR=${RED}
-	    
+	    [[ -z $REM_ERR && -z $VERBOSE ]] && URL=
+
 	    popd >/dev/null
 	fi
-	
-	printf "$FORMAT" "$DIR" "$PIN_ERR" "${PIN:---}" "$CPIN" "$CLEAR" "$REM_ERR" "$URL" "$CLEAR"
+
+	printf "$FORMAT" "" "$DIR" "$PIN_ERR" "${PIN:---}" "$CPIN" "$CLEAR" "$REM_ERR" "$URL" "$CLEAR"
+
+        # Recurse to this sub-repo if it has a .gitrepos file
+	if [[ -e $DIR/.gitrepos ]]; then
+	    BASH_SOURCE_FULL=$(readlink -f $BASH_SOURCE)
+	    pushd $DIR >/dev/null
+	    [[ -n $COLOR ]] && COLOROPT="-c yes"
+	    $BASH_SOURCE_FULL $COLOROPT list --indent $((INDENT + 2)) "${ARGS[@]}"
+	    popd >/dev/null
+	fi
+
     done < <(
 	if [[ -n $REPOS ]]; then
 	    for REPO in ${REPOS[@]}; do
@@ -824,21 +856,20 @@ while [[ -n $@ ]]; do
     case $TOKEN in
 	-c|--color)
 	        case $1 in
-		    auto) ;;
-		    yes) COLOR=1;;
-		    no) COLOR=;;
+		    a|auto) ;;
+		    y|yes) COLOR=1;;
+		    n|no) COLOR=;;
 		    *) echo "Invalid option: $TOKEN $1" >&2; exit 1;;
 		esac
 		shift    
 		;;
 	--color=*)
 	        case ${TOKEN#*=} in
-		    auto) ;;
-		    yes) COLOR=1;;
-		    no) COLOR=;;
-		    *) echo "Invalid option: $TOKEN $1" >&2; exit 1;;
+		    a|auto) ;;
+		    y|yes) COLOR=1;;
+		    n|no) COLOR=;;
+		    *) echo "Invalid option: $TOKEN" >&2; exit 1;;
 		esac
-		shift
 		;;
 	-f|--file) FILE=$1; shift;;
 	--file=*) FILE=${TOKEN#*=};;
