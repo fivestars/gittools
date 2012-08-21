@@ -333,7 +333,7 @@ function git-subrepo.rm {
 }
 
 function git-subrepo.update {
-    local TOKEN ARGS REPOS REPO COMMIT TOP REBASE RECURSE=1 FORMAT PREFIX INDENT CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN DPIN COMMAND=1
+    local TOKEN ARGS=" " REPOS REPO COMMIT TOP REBASE RECURSE=1 FORMAT PREFIX INDENT CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN DPIN COMMAND=1
 
     # We need to save a reference to the outer stdin here since
     # we want to read from the keyboard for user input and the
@@ -715,7 +715,7 @@ function git-subrepo.foreach {
 }
 
 function git-subrepo.list {
-    local REPOS FORMAT DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR REM_ERR BRANCH REFLOG REFHASH REFNAME COUNT=0 ARGS VERBOSE INDENT
+    local REPOS FORMAT DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR REM_ERR BRANCH REFLOG REFHASH REFNAME COUNT=0 ARGS=" " VERBOSE INDENT
 
     for TOKEN in "$@"; do
 	read -r TOKEN <<< $TOKEN # trim whitespace
@@ -724,7 +724,7 @@ function git-subrepo.list {
 	    -v|--verbose) ARGS="${ARGS[@]} $TOKEN"; VERBOSE=1;;
 	    --indent) INDENT=$1; shift;;
 	    --indent=*) INDENT=${TOKEN#*=};;
-	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" && return 1;;
+	    *) [[ ${TOKEN:0:1} == "-" ]] && echo "Unknown option: $TOKEN" >&2 && return 1;;
 	esac
     done
     REPOS="$@"
