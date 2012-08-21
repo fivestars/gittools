@@ -235,7 +235,8 @@ function git-subrepo.add {
     # See if <path> is supplied or not
     read URL DIR <<< "$@"
     if [[ -z $DIR ]]; then
-	DIR=$(echo $URL | sed 's/\(.*[:/]\|^\)\([^:/]\+\)\.git/\2/')
+	DIR=$(basename $URL)
+	DIR=${DIR%.git}
     fi
 
     touch $FILE
