@@ -696,7 +696,8 @@ function git-subrepo.foreach {
     while read DIR; do
 	URL=$(git config --file $FILE subrepo.$DIR.url)
 	PIN=$(git config --file $FILE subrepo.$DIR.pin)
-	echo -e "\n${GRAY}$DIR($PIN) -- $URL ${CLEAR}"
+	[[ -n $PIN ]] && PIN="($PIN)"
+	echo -e "\n${GRAY}${DIR}${PIN} -- $URL ${CLEAR}"
 	pushd $DIR >/dev/null
 	eval $COMMAND
 	popd >/dev/null
@@ -907,7 +908,7 @@ case $COMMAND in
     add|help|install|uninstall)
         git-subrepo.$COMMAND "$@"
         ;;
-    *)  echo "Unknown sub-repo command '$COMMAND'" >&2
+    *)  echo "git: '$COMMAND' is not a git-subrepo command. See 'git-subrepo help'." >&2
         exit 1
         ;;
 esac
