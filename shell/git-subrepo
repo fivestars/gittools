@@ -341,6 +341,7 @@ function git-subrepo.update {
     exec 10<&0
 
     for TOKEN in "$@"; do
+	read -r TOKEN <<< $TOKEN # trim whitespace
 	[[ ${TOKEN:0:1} == '-' ]] && shift
 	case $TOKEN in
 	    --rebase) ARGS="${ARGS[@]} $TOKEN"; REBASE=$TOKEN;;
@@ -715,9 +716,7 @@ function git-subrepo.list {
     local REPOS FORMAT DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR REM_ERR BRANCH REFLOG REFHASH REFNAME COUNT=0 ARGS VERBOSE INDENT
 
     for TOKEN in "$@"; do
-	shopt -s extglob
-	TOKEN=${TOKEN##+([[:space:]])}
-	shopt -u extglob
+	read -r TOKEN <<< $TOKEN # trim whitespace
 	[[ ${TOKEN:0:1} == '-' ]] && shift
 	case ${TOKEN} in
 	    -v|--verbose) ARGS="${ARGS[@]} $TOKEN"; VERBOSE=1;;
