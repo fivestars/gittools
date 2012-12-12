@@ -831,7 +831,7 @@ function git-subrepo.util.expand-repos () {
 	# Get an ordered list of the subrepo entries
 	git config --file $FILE --list | \
 		grep -n "^subrepo\..*\.path=" | \
-		sed -E 's/^([^:]+).*path=(.*)/\1 \2/g' >$IN
+		sed 's/:.*=/ /g' >$IN
 
 	if [[ -z "$@" ]]; then
 		cp $IN $OUT
