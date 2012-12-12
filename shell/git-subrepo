@@ -493,11 +493,11 @@ function git-subrepo.update {
 				case ${CHOICE:=c} in
 					c)  ;;
 					k)  popd >/dev/null;
-					continue;;
+						continue;;
 					o)  popd >/dev/null;
-					_checkout $DIR $CPIN;
-					pushd $DIR >/dev/null;
-					continue;;
+						_checkout $DIR $CPIN;
+						pushd $DIR >/dev/null;
+						continue;;
 					*)  printf "%${INDENT}sInvalid choice: $CHOICE. Stopping.\n" >&2;
 					return 1;;
 				esac
@@ -659,9 +659,9 @@ function git-subrepo.checkout {
     if [[ -n $PIN ]]; then
 		pushd $DIR >/dev/null
 		if git-subrepo.util.git-retry fetch && git checkout $B $PIN; then
-				if git branch | grep -q "(no branch)"; then
-			PIN="!!$PIN"
-				fi
+			if git branch | grep -q "(no branch)"; then
+				PIN="!!$PIN"
+			fi
 			popd >/dev/null
 			git config --file $FILE subrepo.$DIR.pin $PIN
 		else
@@ -826,12 +826,12 @@ function git-subrepo.util.git-retry {
 }
 
 function git-subrepo.util.expand-repos () {
-	local REPO IN=$(mktemp) OUT=$(mktemp) FIRST LAST START STOP
+	local REPO IN=$(mktemp /tmp/git-subrepo.XXXXXXXXXX) OUT=$(mktemp /tmp/git-subrepo.XXXXXXXXXX) FIRST LAST START STOP
 
 	# Get an ordered list of the subrepo entries
 	git config --file $FILE --list | \
 		grep -n "^subrepo\..*\.path=" | \
-		sed 's/^\([^:]\+\).*path=\(.*\)/\1 \2/g' >$IN
+		sed -E 's/^([^:]+).*path=(.*)/\1 \2/g' >$IN
 
 	if [[ -z "$@" ]]; then
 		cp $IN $OUT
