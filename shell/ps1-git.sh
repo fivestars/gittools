@@ -6,9 +6,8 @@
 #
 # Example (in .bashrc):
 # . /path/to/ps1-git.sh # use some sort of non-relative path
-# export PS1='\n\u\[\033[1;37m\]@\[\033[1;36m\]\h:\[\033[1;33m\]\w $(ps1-git -l -s"|")\[\033[1;37m\]\n$\[\033[0m\] '
+# export PS1='\n\u\033[1;37m@\033[1;36m\h:\033[1;33m\w $(ps1-git -l -s"|")\033[1;37m\n$\033[0m '
 
-# Display the current git branch status information
 function ps1-git() {
 
     # Record the state of the last command-line command
@@ -31,6 +30,11 @@ function ps1-git() {
     done
     shift $((OPTIND - 1))
 
+    # Quick check to see if we're in a git repository
+    local LDIR=${BASH_SOURCE[0]}; while [[ -h "$LDIR" ]]; do LDIR=$(readlink "$LDIR"); done;
+    LDIR=$(builtin cd -P $(dirname "$LDIR") && pwd)
+    local GIT_DIR=
+    GIT_DIR=$($LDIR/in-git.sh)/.git || return 0
 
     if [[ $(git rev-parse --is-inside-git-dir 2>/dev/null) != false ]] || \
 	! GIT_DIR=$(git rev-parse --git-dir); then
@@ -116,7 +120,10 @@ function ps1-git() {
     # Display the most recently generated status
     cat $GIT_DIR/.prompt_last
 
+
     [[ -z ${STALE} ]] && echo -en ${AFTER} || echo -en ${AFTER_STALE}
+
+    return $RESULT
 }
 
 ps1-git $@ >/dev/null
