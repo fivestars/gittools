@@ -31,11 +31,7 @@ function ps1-git() {
     shift $((OPTIND - 1))
 
     # Quick check to see if we're in a git repository
-    local LDIR=${BASH_SOURCE[0]}; while [[ -h "$LDIR" ]]; do LDIR=$(readlink "$LDIR"); done;
-    LDIR=$(builtin cd -P $(dirname "$LDIR") && pwd)
     local GIT_DIR=
-    GIT_DIR=$($LDIR/in-git.sh)/.git || return 0
-
     if [[ $(git rev-parse --is-inside-git-dir 2>/dev/null) != false ]] || \
 	! GIT_DIR=$(git rev-parse --git-dir); then
 	return 0
