@@ -1,0 +1,101 @@
+#!/bin/bash -e
+
+SIMULATE=false
+REMOTE=origin
+DATE="1 month ago"
+while getopts "sd:r:h" OPT; do
+	case $OPT in
+		s) SIMULATE=true;;
+		d) DATE="$OPTARG";;
+		r) REMOTE="$OPTARG";;
+		h)  echo "Converts a remote git repo's remote branches to tags"
+			echo
+			echo "Usage:"
+			echo "    branch2tag [options] <pattern>"
+			echo
+			echo "Arguments:"
+			echo "------------------"
+			echo "    <pattern>: A \"git branch --list\" pattern describing the set of"
+			echo "               remote branch names that you wish to convert. Do not"
+			echo "               include the remote name prefix. Remember to wrap it in"
+			echo "               single-quotes to avoid bash globbing"
+			echo "               Examples: 'rest_release*', 'JIRA-*'"
+			echo
+			echo "Options:"
+			echo "------------------"
+			echo "    -d <date> : The date of each branch's HEAD commit is compared"
+			echo "                against <date>, and if the commit is older, that"
+			echo "                branch will be converted to a tag."
+			echo "                Default: '1 month ago'"
+			echo
+			echo "    -r <remote> : The remote to modify."
+			echo "                  Default: origin"
+			echo
+			echo "    -s : Performs a dry-run, displaying which branches would be converted"
+			echo
+			echo "    -h : Displays this help and exits with success"
+			exit;;
+	esac
+done
+shift $((OPTIND-1))
+
+PATTERN="$@"
+[[ -z $PATTERN ]] && echo "Usage: branch2tag [options] <pattern>" >&2 && exit 1
+
+DATEFILE=$(mktemp)
+TESTFILE=$(mktemp)
+BRANCHFILE=$(mktemp)
+trap "rm -f $DATEFILE $TESTFILE $BRANCHFILE" EXIT
+
+# Draw our "line in the sand"
+touch -d "$DATE" $DATEFILE
+
+# What branches are we looking at?
+while read BRANCH; do
+	AGE=$(git log -1 --no-walk --format="%cr" $BRANCH)
+	touch -d "$AGE" $TESTFILE
+	if [[ $TESTFILE -ot $DATEFILE ]]; then
+		echo $BRANCH >> $BRANCHFILE
+	else
+		echo "Ignoring $BRANCH from $AGE"
+	fi
+done < <(git branch -r --list "$REMOTE/$PATTERN" | grep -v " -> ")
+
+# Create the tags
+while read BRANCH; do
+	NAME=${BRANCH#${REMOTE}/}
+
+	if git show-ref tags/$NAME &>/dev/null; then
+		if [[ $(git rev-list -n1 tags/$NAME) != $(git rev-parse $BRANCH) ]]; then
+			if $SIMULATE; then
+				echo git tag -f -m "\"Archiving to tag\"" $NAME $BRANCH
+			else
+				git tag -f -m "Archiving to tag" $NAME $BRANCH
+			fi
+		fi
+	else
+		if $SIMULATE; then
+			echo git tag -m "\"Archiving to tag\"" $NAME $BRANCH
+		else
+			git tag -m "Archiving to tag" $NAME $BRANCH
+		fi
+	fi
+
+done < $BRANCHFILE
+
+# Publish the tags
+if $SIMULATE; then
+    echo git push --tags $REMOTE
+else
+	git push --tags $REMOTE
+fi
+
+# Delete the old remote branches
+while read BRANCH; do
+	if $SIMULATE; then
+		echo git push origin :refs/heads/${BRANCH#${REMOTE}/}
+	else
+		git push origin :refs/heads/${BRANCH#${REMOTE}/}
+	fi
+done < $BRANCHFILE
+
