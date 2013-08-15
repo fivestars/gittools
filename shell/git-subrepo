@@ -389,7 +389,7 @@ function git-subrepo.update {
 	while read DIR; do
 		URL=$(git config --file $FILE subrepo.$DIR.url)
 		PIN=$(git config --file $FILE subrepo.$DIR.pin)
-		[[ -n $PIN ]] && DPIN="($PIN)"
+		DPIN=${PIN:+($PIN)}
 		echo
 
 		# See if the sub-repo is pinned to a particular commit.
@@ -705,9 +705,13 @@ function git-subrepo.foreach {
 		PIN=$(git config --file $FILE subrepo.$DIR.pin)
 		[[ -n $PIN ]] && PIN="($PIN)"
 		echo -e "\n${GRAY}${DIR}${PIN} -- $URL ${CLEAR}"
-		pushd $DIR >/dev/null
-		eval $COMMAND
-		popd >/dev/null
+		if [[ -e $DIR ]]; then
+			pushd $DIR >/dev/null
+			eval $COMMAND
+			popd >/dev/null
+		else
+			echo "Skipping $DIR. Directory not present." >&2
+		fi
     done < <(git-subrepo.util.expand-repos "$@")
 }
 
