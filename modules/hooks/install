@@ -2,62 +2,28 @@
 
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
-MOVE_HOOKS=
-OVERWRITE_HOOKS=
-SKIP_HOOKS=
-ALL=
+OVERWRITE_HOOKS=false
+SKIP_HOOKS=false
+ALL=false
 while getopts "im:osa" OPT; do
-    case $OPT in
-	m) MOVE_HOOKS=$OPTARG;;
-	o) OVERWRITE_HOOKS=1; [[ -z $MOVE_HOOKS ]] && MOVE_HOOKS=gt_old;;
-	s) SKIP_HOOKS=1;;
-	a) ALL=1;;
+	case $OPT in
+	o) OVERWRITE_HOOKS=true;;
+	s) SKIP_HOOKS=true;;
+	a) ALL=true;;
 	\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
-    esac
+	esac
 done
 shift $((OPTIND-1))
-SRC=$1
-
-# Find where this script is being called from
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
-DIR=$( cd -P "$( dirname "$SOURCE" )" && pwd )
-GITTOOLS=$(cd -P "$DIR/../.." && pwd)
-
-# Where will we look for our custom hook scripts to be enabled (given by '-s')
-[[ -z $SRC ]] && SRC=$GITTOOLS/modules/hooks/custom-hooks
 
 # Confirm that we're in a git repo
-if ! REPO=$($GITTOOLS/shell/in-git.sh); then
-    echo "Not in a git repository" && exit 1
+if [[ $(git rev-parse --is-inside-git-dir 2>/dev/null) != false ]] || \
+	! GITDIR=$(git rev-parse --git-dir); then
+	echo "Not in a git repository" && exit 1
 fi
+REPO=$(git rev-parse --show-toplevel)
 
-if CONFIG_GITTOOLS=$(git config --get zynga.gittools.path) || 
-    { [[ -e $REPO/gittools ]] && CONFIG_GITTOOLS=$REPO/gittools; } then
-    if [[ $(cd $CONFIG_GITTOOLS && pwd) != $(cd $GITTOOLS && pwd) ]]; then
-	echo "Installing from \"$GITTOOLS\", but configured to use gittools at \"$CONFIG_GITTOOLS\". Continue? (Y/n) "
-	read ANSWER
-	if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
-	    echo "Consider updating git config option: zynga.gittools.path"
-	else      
-	    exit 1
-	fi
-    fi
-else
-    echo
-    echo -n "Set \"$GITTOOLS\" as the global gittools instance for $USER on this machine? (y/N) "
-    read ANSWER
-    if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
-	git config --global --replace-all zynga.gittools.path $GITTOOLS
-    fi
-    
-    echo
-    echo -n "Set \"$GITTOOLS\" as the gittools instance for this repository? (overrides the global setting) (y/N) "
-    read ANSWER
-    if [[ -z $ANSWER || $ANSWER == Y || $ANSWER == y ]]; then
-	git config --local --replace-all zynga.gittools.path $GITTOOLS
-    fi
-fi
+# Find where this script is being called from
+DIR=$(dirname "$BASH_SOURCE")
 
 # Determine if any git-hooks have already been installed in
 # this repo so that we don't accidentally overwrite them.
@@ -68,102 +34,90 @@ mkfifo $fifo_dest
 trap "rm -f $fifo_src $fifo_dest" EXIT SIGHUP SIGINT SIGTERM
 
 echo ${HOOKS[*]} | xargs -n1  | sort > $fifo_src &
-ls --file-type $REPO/.git/hooks | sort > $fifo_dest &
+ls --file-type $GITDIR/hooks | sort > $fifo_dest &
 
-blocking=$(comm -12 $fifo_src $fifo_dest)
+present=$(comm -12 $fifo_src $fifo_dest)
 rm -f $fifo_src $fifo_dest
 trap - EXIT SIGHUP SIGINT SIGTERM
 
-if [[ -n $blocking ]]; then
-    if [[ -n $SKIP_HOOKS ]]; then
-	echo "Skipping the basic hooks installation and proceeding to custom hooks in $SRC"
-    elif [[ -n $MOVE_HOOKS ]]; then
-	echo $blocking | sed "s/ /\n/g" | xargs  -I % mv $REPO/.git/hooks/% $REPO/.git/hooks/%.$MOVE_HOOKS
-    else
+if [[ -n $present ]]; then
 	echo
 	echo "Detected hooks already installed for this repo:"
-	echo $blocking | xargs -n1 | sed "s/^/    /"
+	echo $present | xargs -n1 | sed "s/^/	/"
 	echo
-	echo "Specify one of the following on the command line to continue installation:"
-	echo "    -s to skip basic hook installation"
-	echo "    -m <suffix> to move these hooks aside"
-	echo "    -o to overwrite existing hooks"
-	echo
-	exit 1
-    fi
 fi
+
+# Place the capture script in the hooks directory for convenience
+cp $DIR/capture $GITDIR/hooks
 
 # Install the git-hooks
-if [[ -z $SKIP_HOOKS ]]; then
-    echo -e "Installing hooks to:\t$REPO"
-    echo "cp $GITTOOLS/modules/hooks/git-hooks/* $REPO/.git/hooks"
-    for hook in ${HOOKS[*]}; do
-	cp $GITTOOLS/modules/hooks/git-hooks/$hook $REPO/.git/hooks
-    done
-    
-    # Display all the files that were copied into your repository's hooks directory
-    echo -e "\nInstalled hooks:"
-    ls --file-type $GITTOOLS/modules/hooks/git-hooks | xargs -n1 | sed "s/^/    /"
-    echo 
-fi
-
-# Remove any old hooks that we move aside (if given '-o')
-if [[ -n $OVERWRITE_HOOKS ]]; then
-    rm -f $REPO/.git/hooks/*.$MOVE_HOOKS
-fi
+cat << EOF
+Installing hooks to: $REPO
+(Copying any existing hooks to $REPO/.githooks)
+EOF
+mkdir -p $REPO/.githooks
+for hook in ${HOOKS[*]}; do
+	if [[ -e $GITDIR/hooks/$hook && $(diff $DIR/runner $GITDIR/hooks/$hook | wc -l) > 0 ]]; then
+		mv -v --backup=t $GITDIR/hooks/$hook $REPO/.githooks/
+	fi
+	cp --backup=t $DIR/runner $GITDIR/hooks/$hook
+done
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled
 # in this fashion are added to this repo's git config settings.
 function enable_hooks () {
-    local SRC=$1
-    local available
-    local hook
-    local answer
-    
-    # For each non-base hook, ask if you want to enable it for your repository
-    echo
-    echo "Enabling hooks:"
-    ls --file-type $SRC | xargs -n1 -I {} echo -e "    "{}
-    echo
-    
-    for available in $(ls --file-type $SRC); do
-	hook=
+	local SRC=$1
+	local available
+	local hook
+	local answer
 	
-	# Make sure each custom hook is associated with an original git hook
-	for hook in ${HOOKS[@]}; do
-	    (echo $available | grep -q ^"$hook") && hook=zynga.gittools.hooks.$hook && break
+	# For each non-base hook, ask if you want to enable it for your repository
+	echo
+	echo "Enabling hooks:"
+	ls --file-type $SRC | xargs -n1 -I {} echo -e "	"{}
+	echo
+	
+	for available in $(ls --file-type $SRC); do
+		hook=
+		
+		# Make sure each custom hook is associated with an original git hook
+		for hook in ${HOOKS[@]}; do
+			(echo $available | grep -q ^"$hook-") && break
+		done
+		if [[ -z $hook ]]; then
+			"Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
+			continue
+		fi
+		
+		# Prompt them to enable each one (unless given '-a')
+		if ! (git config --get-regexp "^hooks\.$hook\.$available\.enabled$" "true"); then
+			if ! $ALL; then
+				echo -ne "Enable $available for this repository? (Y/n) "
+				read answer
+			fi
+			case $answer in
+				""|y|Y) git config --bool hooks.$hook.$available.enabled true;
+				*) echo "	Skipped $available"
+			esac
+		else
+			echo "$available already enabled"
+		fi
 	done
-	if [[ -z $hook ]]; then
-	    "Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
-	    continue
-	fi
 	
-	# Prompt them to enable each one (unless given '-a')
-	if ! (git config --get-all $hook | grep -q ^"$available"$); then
-	    answer=
-	    if [[ -z $ALL ]]; then
-		echo -ne "Enable $available for this repository? (Y/n) "
-		read answer
-	    fi
-	    
-	    if [[ -z $answer || "Y" == $answer || "y" == $answer ]]; then
-		git config --add $hook $available
-	    else
-		echo "    Skipped $available"
-	    fi
-	else
-	    echo "$available already enabled"
-	fi
-    done
-    
-    echo -e "\nEnabled hooks:"
-    git config -l | grep zynga.gittools.hooks | sed "s/^/    /g" 
+	echo -e "\nEnabled hooks:"
+	git config --get-regexp "^hooks.*\.enabled$" "true" | sed "s/^/	/g" 
 }
 
-enable_hooks $SRC
+# It's possible they're trying to enable hooks from a location other than .githooks
+[[ -n $1 ]] && enable_hooks $1
 
-echo -e "\nYou can enable/disable custom hooks now by modifying your git config:"
-echo "    git config -l | grep zynga.gittools.hooks"
-echo "    git config --add zynga.gittools.hooks.<hook name> <hook script>"
-echo "    git config --unset zynga.gittools.hooks.<hook name> <hook script>"
+cat << EOF
+
+Any hooks in $REPO/.githooks/ will be enabled by default.
+
+You can enable/disable custom hooks now by modifying your git config:
+	git config --get-regexp hooks.*
+	git config --bool  hooks.<githook name>.<hook script name>.enabled true|false
+	git config --unset hooks.<githook name>.<hook script name>.enabled
+EOF

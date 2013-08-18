@@ -1,65 +1,84 @@
 #! /bin/bash -e
 
-HOOK=$1
+export HOOK=$(basename "$0")
 
-# This script will run all configured hooks found in:
-#     git config --get-all zynga.gittools.hooks.$HOOK
-# It will fail if any of those fail on a command (see '-e') or if 
+# This script will run all configured hooks found in <repository>/.githooks
+# the all hooks found by running:
+#     $(git config --get-regexp hooks.$HOOK.* enabled)
+# It will fail if any of those fail on a command (see 'bash -e') or if 
 # they return non-zero exit codes.
 #
 # The hooks will be run sequentially by default for safety. 
 # If you determine that your hooks can be run in parallel, enable it with:
-#     git config zynga.gittools.hooks.$HOOK.parallel <num>
-# where <num> is the number of jobs you wish to start. If 0, one job
-# will be started for each CPU on the machine.
+#     git config hooks.$HOOK.parallel <num>
+# where <num> is the number of jobs you wish to start. If 0, <num> will
+# match the number of CPUs on the machine.
+#
 # For safety, you can check for parallel execution in your hook by
-# checking the existence of the gittools_hooks_parallel variable.
-#     [[ -z $gittools_hooks_parallel ]] # Will fail the hook unless they are being run sequentially.
+# calling the prevent-parallel function. It checks the value of 
+# git config hooks.$HOOK.parallel and fails if it is set to anything but 1.
+#	Example:
+#		#! /bin/bash
+#		prevent-parallel   # Will fail the hook unless it is being run sequentially.
 
-[[ -n $gittools ]] || !  echo "You must install zynga.gittools"
+DIR=$(dirname "$0")
+REPO=$(git rev-parse --show-toplevel)
+GITDIR=$(git rev-parse --git-dir)
 
-if gittools_hooks_parallel=$(git config --get zynga.gittools.hooks.$HOOK.parallel); then
-	if [[ "0" == "${gittools_hooks_parallel}" ]]; then
-		export gittools_hooks_parallel="-P $(grep -c processor /proc/cpuinfo)"
-	else
-		export gittools_hooks_parallel="-P $(git config --get zynga.gittools.hooks.$HOOK.parallel)"
+if hooks_parallel=$(git config --get hooks.$HOOK.parallel); then
+	if [[ "0" == "${hooks_parallel}" ]]; then
+		hooks_parallel=$(grep -c processor /proc/cpuinfo)
 	fi
+	hooks_parallel="-P $hooks_parallel"
 fi
 
 # Finds the file path to the indicated hook
 function find_hook () {
-	# Check for repository-relative path first
+	# Check for repository-relative (or absolute) path first
 	[[ -e $1 ]] && echo $1 && return
 
 	# Local repository hooks
 	[[ -e .git/hooks/$1 ]] && echo .git/hooks/$1 && return
 
-	# Check gittools last
-	[[ -e $gittools/modules/hooks/custom-hooks/$1 ]] && echo $gittools/modules/hooks/custom-hooks/$1 && return
-
 	# Could not find hook
 	return 1
 }
 
-# Make sure that each hook can be found, otherwise fail after running the ones we found
-gittools_hooks=( )
-gittools_fail=0
-for hook in $(git config --get-all zynga.gittools.hooks.$HOOK); do
+# Collect the various hooks to run
+hooks=
+missing=
+fail=false
+
+# Look in the default location of $REPO/.githooks
+if ls $REPO/.githooks/${HOOK}-* &>/dev/null; then
+	for hook in $REPO/.githooks/${HOOK}*; do
+		if ! git config --get-regexp hooks.$HOOK.$hook disabled &>/dev/null; then
+			hooks="${hooks:+$hooks\0}$hook"
+		fi
+	done
+fi
+
+# Make sure that each configured hook can be found, otherwise fail after running the ones we found
+for hook in $(git config --get-regexp hooks.$HOOK.enabled true); do
+	hook=${hook%.enabled true} # extract the hook's name
+	hook=${hook@hooks.$HOOK.}
 	if ! found=$(find_hook $hook); then
 		echo "Could not find hook: $hook"
-		gittools_fail=1
+		missing="${missing:+$missing\0}$hook"
+		fail=true
 	else
-		gittools_hooks[${#gittools_hooks[@]}]="$found ${*:2},"
+		hooks="$hooks\0$hook"
 	fi
 done
 
 # Run the hooks through xargs. If any of them fail, xargs will fail and the script
 # will exit with an error code due to the -e at the top of this script.
-echo -e ${gittools_hooks[*]} | xargs -d, -L1 $gittools_hooks_parallel bash -e $gittools/modules/hooks/capture
+echo -en $hooks | xargs -0 -L1 $hooks_parallel bash -e $DIR/capture
 
 # Fail the hook if we couldn't find one of the hook scripts (even though we ran
 # the ones we found and encountered no errors)
-if [[ $gittools_fail != 0 ]]; then
-	echo "Failed $HOOK checks due to missing hooks"
+if $fail; then
+	echo "Failed $HOOK checks due to missing hooks:"
+	echo -en $missing | xargs -0 -L1 | sed "s/^/	/"
 	exit 1
 fi
