@@ -32,18 +32,6 @@ if hooks_parallel=$(git config --get hooks.$HOOK.parallel); then
 	hooks_parallel="-P $hooks_parallel"
 fi
 
-# Finds the file path to the indicated hook
-function find_hook () {
-	# Check for repository-relative (or absolute) path first
-	[[ -e $1 ]] && echo $1 && return
-
-	# Local repository hooks
-	[[ -e .git/hooks/$1 ]] && echo .git/hooks/$1 && return
-
-	# Could not find hook
-	return 1
-}
-
 # Collect the various hooks to run
 hooks=
 missing=
@@ -51,7 +39,7 @@ fail=false
 
 # Look in the default location of $REPO/.githooks
 if ls $REPO/.githooks/${HOOK}-* &>/dev/null; then
-	for hook in $REPO/.githooks/${HOOK}*; do
+	for hook in $REPO/.githooks/${HOOK}-*; do
 		if ! git config --get-regexp hooks.$HOOK.$hook disabled &>/dev/null; then
 			hooks="${hooks:+$hooks\0}$hook"
 		fi
@@ -59,17 +47,18 @@ if ls $REPO/.githooks/${HOOK}-* &>/dev/null; then
 fi
 
 # Make sure that each configured hook can be found, otherwise fail after running the ones we found
-for hook in $(git config --get-regexp hooks.$HOOK.enabled true); do
-	hook=${hook%.enabled true} # extract the hook's name
-	hook=${hook@hooks.$HOOK.}
-	if ! found=$(find_hook $hook); then
+while read line; do
+	section=${line%.enabled true}
+	path=$(git config $section.path)
+	hook=${section#hooks\.$HOOK\.}
+	if [[ ! -e $path ]]; then
 		echo "Could not find hook: $hook"
 		missing="${missing:+$missing\0}$hook"
 		fail=true
 	else
-		hooks="$hooks\0$hook"
+		hooks="$hooks\0$path"
 	fi
-done
+done < <(git config --get-regexp hooks\.$HOOK\..*\.enabled true)
 
 # Run the hooks through xargs. If any of them fail, xargs will fail and the script
 # will exit with an error code due to the -e at the top of this script.

@@ -23,101 +23,102 @@ fi
 REPO=$(git rev-parse --show-toplevel)
 
 # Find where this script is being called from
-DIR=$(dirname "$BASH_SOURCE")
-
-# Determine if any git-hooks have already been installed in
-# this repo so that we don't accidentally overwrite them.
-fifo_src=$(mktemp -u)
-fifo_dest=$(mktemp -u)
-mkfifo $fifo_src
-mkfifo $fifo_dest
-trap "rm -f $fifo_src $fifo_dest" EXIT SIGHUP SIGINT SIGTERM
-
-echo ${HOOKS[*]} | xargs -n1  | sort > $fifo_src &
-ls --file-type $GITDIR/hooks | sort > $fifo_dest &
-
-present=$(comm -12 $fifo_src $fifo_dest)
-rm -f $fifo_src $fifo_dest
-trap - EXIT SIGHUP SIGINT SIGTERM
-
-if [[ -n $present ]]; then
-	echo
-	echo "Detected hooks already installed for this repo:"
-	echo $present | xargs -n1 | sed "s/^/	/"
-	echo
-fi
+SRCDIR=$(dirname "$BASH_SOURCE")
 
 # Place the capture script in the hooks directory for convenience
-cp $DIR/capture $GITDIR/hooks
+cp $SRCDIR/capture $GITDIR/hooks
 
 # Install the git-hooks
-cat << EOF
-Installing hooks to: $REPO
-(Copying any existing hooks to $REPO/.githooks)
+cat <<EOF
+Installing hooks:
+	Copying any existing hooks to $REPO/.githooks
 EOF
 mkdir -p $REPO/.githooks
 for hook in ${HOOKS[*]}; do
-	if [[ -e $GITDIR/hooks/$hook && $(diff $DIR/runner $GITDIR/hooks/$hook | wc -l) > 0 ]]; then
+	if [[ -e $GITDIR/hooks/$hook && $(diff $SRCDIR/runner $GITDIR/hooks/$hook | wc -l) > 0 ]]; then
 		mv -v --backup=t $GITDIR/hooks/$hook $REPO/.githooks/
 	fi
-	cp --backup=t $DIR/runner $GITDIR/hooks/$hook
+	cp --backup=t $SRCDIR/runner $GITDIR/hooks/$hook
 done
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled
 # in this fashion are added to this repo's git config settings.
 function enable_hooks () {
-	local SRC=$1
-	local available
-	local hook
-	local answer
+	local path name prefix hook answer line section
 	
 	# For each non-base hook, ask if you want to enable it for your repository
 	echo
-	echo "Enabling hooks:"
-	ls --file-type $SRC | xargs -n1 -I {} echo -e "	"{}
-	echo
+	echo "Enabling Hooks:"
+	echo $* | tr ' ' '\0' | xargs -0 -I {} echo -e "	$PWD/"{}
 	
-	for available in $(ls --file-type $SRC); do
-		hook=
+	for path in $*; do
+		name=$(basename $path)
+	
+		if [[ '/' != ${path:0:1} ]]; then
+			# It's a relative path
+			pushd $(dirname $path) &>/dev/null
+			if [[ $(git rev-parse --show-toplevel) == $REPO ]]; then
+				# It's within the repository
+				prefix=$(git rev-parse --show-prefix)
+				path=$prefix$name
+			else
+				# It's external to the repository - use absolute path
+				path=$PWD/$name
+			fi
+			popd &>/dev/null
+		fi
 		
 		# Make sure each custom hook is associated with an original git hook
 		for hook in ${HOOKS[@]}; do
-			(echo $available | grep -q ^"$hook-") && break
+			(echo $name | grep -q ^"$hook-") && break || hook=
 		done
 		if [[ -z $hook ]]; then
-			"Could not determine which git-hook \"$available\" is intended for. Prefix your hook with a proper git-hook name"
+			echo "	Could not determine which git-hook \"$name\" is intended for. Prefix your hook with a proper git-hook name"
 			continue
 		fi
 		
+		# Add a path entry to the config for this hook script
+		git config --path hooks.$hook.$name.path $path
+
 		# Prompt them to enable each one (unless given '-a')
-		if ! (git config --get-regexp "^hooks\.$hook\.$available\.enabled$" "true"); then
+		if ! (git config --get-regexp "^hooks\.$hook\.$name\.enabled$" "true" &>/dev/null); then
 			if ! $ALL; then
-				echo -ne "Enable $available for this repository? (Y/n) "
+				echo -ne "	Enable $name for this repository? (Y/n) "
 				read answer
 			fi
 			case $answer in
-				""|y|Y) git config --bool hooks.$hook.$available.enabled true;
-				*) echo "	Skipped $available"
+				""|y|Y) git config --bool hooks.$hook.$name.enabled true;;
+				*) echo "		Skipped $name";;
 			esac
 		else
-			echo "$available already enabled"
+			echo "	$name already enabled"
 		fi
 	done
 	
-	echo -e "\nEnabled hooks:"
-	git config --get-regexp "^hooks.*\.enabled$" "true" | sed "s/^/	/g" 
+	if git config --get-regexp "^hooks.*\.enabled$" "true" &>/dev/null; then
+		echo -e "\nEnabled Hooks:"
+		while read line; do
+			if ! git config --get-regexp hooks\..*\.$line\.enabled false &>/dev/null; then
+				echo "	$PWD/$line"
+			fi
+		done < <(ls $REPO/.githooks | grep -f <(echo ${HOOKS[*]} | xargs -n1 | sed s/^/^/g ))
+		while read line; do
+			section=${line%.enabled true}
+			path=$(git config $section.path)
+			echo "	$path"
+		done < <(git config --get-regexp "^hooks.*\.enabled$" "true")
+	fi
 }
 
 # It's possible they're trying to enable hooks from a location other than .githooks
-[[ -n $1 ]] && enable_hooks $1
+[[ -n $* ]] && enable_hooks $*
 
-cat << EOF
+cat <<EOF
 
-Any hooks in $REPO/.githooks/ will be enabled by default.
-
-You can enable/disable custom hooks now by modifying your git config:
-	git config --get-regexp hooks.*
-	git config --bool  hooks.<githook name>.<hook script name>.enabled true|false
-	git config --unset hooks.<githook name>.<hook script name>.enabled
+Installation Complete:
+	You can enable/disable your hooks now by modifying your git config:
+		git config --get-regexp hooks.*
+		git config --bool  hooks.<githook name>.<hook script name>.enabled true|false
+		git config --unset hooks.<githook name>.<hook script name>.enabled
 EOF
