@@ -1,15 +1,64 @@
 #! /bin/bash -e
 
+read -r -d '' HELP <<EOF || true
+This script installs the git hook multiplexing system into
+the current repository ($(git rev-parse --show-toplevel)).
+This allows you to configure any number of scripts to run 
+for each git hook in either a sequential or parallel manner.
+
+The installation process takes care not to clobber existing 
+scripts. Instead, it moves them to the newly created .githooks
+directory located at the the top-level repository directory.
+
+Usage: install [-a] [-c] <scripts...>
+
+Options:
+    -a  When <scripts...> are provided, automatically enable them
+        by default. Otherwise, you will be prompted to enable each
+        one during the installation process.
+
+    -c  Delete all scripts from .git/hooks and .githooks that match
+        the standare git hooks' names prior to installing the
+        multiplexing scripts for each. This is a cleanup step that
+        may become necessary if you run the install script multiple
+        times and the multiplexer script is lexically different than
+        what is currently installed.
+
+    -h  Displays this help
+
+Arguments:
+    <scripts...>    A list of script filenames to be run for this
+                    repository. They should be bash scripts of the 
+                    form <git hook name>-XXXX.
+
+                    The valid git hook names are:
+                        applypatch-msg
+                        commit-msg
+                        post-checkout
+                        post-commit
+                        post-merge
+                        post-receive
+                        post-update
+                        pre-applypatch
+                        pre-commit
+                        prepare-commit-msg
+                        pre-rebase
+                        pre-receive update
+
+                    Examples: 
+                        pre-commit-unittest
+                        commit-msg-syntax
+EOF
+
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
-OVERWRITE_HOOKS=false
-SKIP_HOOKS=false
 ALL=false
-while getopts "im:osa" OPT; do
+CLEAR=false
+while getopts "ach" OPT; do
 	case $OPT in
-	o) OVERWRITE_HOOKS=true;;
-	s) SKIP_HOOKS=true;;
 	a) ALL=true;;
+	c) CLEAR=true;;
+	h) echo "$HELP" | less; exit;;
 	\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
 	esac
 done
@@ -35,11 +84,14 @@ Installing hooks:
 EOF
 mkdir -p $REPO/.githooks
 for hook in ${HOOKS[*]}; do
-	if [[ -e $GITDIR/hooks/$hook && $(diff $SRCDIR/runner $GITDIR/hooks/$hook | wc -l) > 0 ]]; then
+	if $CLEAR; then
+		rm -f $GITDIR/hooks/$hook $REPO/.githooks/$hook
+	elif [[ -e $GITDIR/hooks/$hook && $(diff $SRCDIR/runner $GITDIR/hooks/$hook | wc -l) > 0 ]]; then
 		mv -v --backup=t $GITDIR/hooks/$hook $REPO/.githooks/
 	fi
 	cp --backup=t $SRCDIR/runner $GITDIR/hooks/$hook
 done
+
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled
