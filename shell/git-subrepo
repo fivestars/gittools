@@ -2,7 +2,7 @@
 # Original source can be found at https://github-ca.corp.zynga.com/jowilson/gittools
 
 function git-subrepo.help {
-    echo "\
+    cat <<EOF | less
 Usage: git subrepo [<general options>] [list [-v|--verbose] [<path>...]]
    or: git subrepo [<general options>] install [--local] [--global] [--core]
    or: git subrepo [<general options>] uninstall [--local] [--global] [--core]
@@ -57,10 +57,10 @@ Common Arguments:
 	            The format of <path>... is a list of path-strings, separated by spaces.
 
 	            A path-string can be one of the following formats:
-	              path/to/sub-repo							: A single sub-repo
-	              path/to/sub-repo... 						: All sub-repos after this one, inclusive
-	              ...path/to/sub-repo 						: All sub-repos up to this one, inclusive
-	              path/to/sub-repo-a...path/to/sub-repo-b	: All sub-repos between the two, inclusive
+                  path/to/sub-repo                           : A single sub-repo
+                  path/to/sub-repo...                        : All sub-repos after this one, inclusive
+                  ...path/to/sub-repo                        : All sub-repos up to this one, inclusive
+                  path/to/sub-repo-a...path/to/sub-repo-b    : All sub-repos between the two, inclusive
 
 Operations:
     list: Lists the current sub-repos for this repository.
@@ -160,7 +160,7 @@ Operations:
 
     help: Displays this help message.
 
-"
+EOF
 }
 
 function git-subrepo.install {
