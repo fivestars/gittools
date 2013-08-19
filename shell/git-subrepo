@@ -927,7 +927,7 @@ while [[ -n "$@" ]]; do
 done
 
 # Move to the top-level git dir
-cd $(git rev-parse --show-toplevel)
+cd $(git rev-parse --show-cdup)
 
 COMMAND=${1:-list}
 shift
@@ -947,7 +947,7 @@ case $COMMAND in
         git-subrepo.$COMMAND "$@"
         ;;
 
-    *)  echo "git: '$COMMAND' is not a git-subrepo command. See 'git-subrepo help'." >&2
+    *)  echo "git: '$COMMAND' is not a git-subrepo command. See 'git subrepo help'." >&2
         exit 1
         ;;
 esac
