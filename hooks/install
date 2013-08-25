@@ -137,7 +137,7 @@ function enable_hooks () {
 	if git config --get-regexp "^hooks\..*\.enabled$" "true" &>/dev/null || [[ -n $(ls -A .githooks/) ]]; then
 		echo -e "\nEnabled Hooks:"
 		while read line; do
-			if ! git config --get-regexp hooks\.$line\.enabled false &>/dev/null; then
+			if [[ $line == ${line%\~} ]] && ! git config --get-regexp hooks\.$line\.enabled false &>/dev/null; then
 				echo "	$PWD/$line"
 			fi
 		done < <(ls $REPO/.githooks | grep -f <(echo ${HOOKS[*]} | xargs -n1 | sed s/^/^/g ))
