@@ -64,7 +64,7 @@ function ps1-git() {
 		UPSTREAM=$(git rev-parse --abbrev-ref @{u} 2>/dev/null) || UPSTREAM=
 
 		# Collect our statii in this empty array
-		local STATII=();
+		local STATII=()
 		local NEW=$(git ls-files -o --exclude-standard $REPO | wc -l)
 		local EDITS=$(git ls-files -dm $REPO | wc -l)
 		local STAGED=$(git diff --name-only --cached | wc -l)
@@ -103,7 +103,7 @@ function ps1-git() {
 		fi
 		
 		# Write the prompt string to cache file
-		echo "${BRANCHES}(${STATII})" > $GITDIR/.prompt_last
+		echo "${BRANCHES}(${STATII})" >$GITDIR/.prompt_last
 
 		# Color code to white to let us know this is a fresh status
 		echo -en ${BEFORE}
@@ -118,8 +118,7 @@ function ps1-git() {
 	# Display the most recently generated status
 	cat $GITDIR/.prompt_last
 
-
-	${CACHED} && echo -en ${AFTER} || echo -en ${AFTER_STALE}
+	${CACHED} && echo -en ${AFTER_STALE} || echo -en ${AFTER}
 
 	return $RESULT
 }
