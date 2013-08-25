@@ -2,22 +2,21 @@
 # Source from .bashrc
 #
 # Provides:
+#
 #   ps1-git: Generates a prompt string summarizing the state of the current git repo.
 #
 # Example (in .bashrc):
-# . /path/to/ps1-git.sh # use some sort of non-relative path
-# export PS1='\n\u\033[1;37m@\033[1;36m\h:\033[1;33m\w $(ps1-git -l -s"|")\033[1;37m\n$\033[0m '
+#
+#	. /path/to/ps1-git.sh # use some sort of non-relative path
+#	export PS1='\n\u\033[1;37m@\033[1;36m\h:\033[1;33m\w $(ps1-git -l -s"|")\033[1;37m\n$\033[0m '
 
 function ps1-git() {
 
-	# Record the state of the last command-line command
-	RESULT=$?
-
-	local LAZY WAIT="5 minutes ago" SHORT BEFORE='\033[1;37m' BEFORE_STALE='\033[0;37m' AFTER AFTER_STALE STALE GIT_DIR
+	local RESULT=$? GITDIR REPO FORCE=false WAIT="5 minutes ago" SHORT BEFORE='\033[1;37m' BEFORE_STALE='\033[0;37m' AFTER AFTER_STALE STALE CACHED=false
 	local OPTIND OPTARG OPTERR OPT
 	while getopts :lw:WsS:c:b:B:a:A: OPT; do
 		case $OPT in
-			l) LAZY=1;;
+			l) FORCE=true;;
 			w) WAIT="$OPTARG ago";;
 			W) WAIT=;;
 			s) SHORT='|';;
@@ -29,21 +28,21 @@ function ps1-git() {
 		esac
 	done
 	shift $((OPTIND - 1))
-	
+
 	# Quick check to see if we're in a git repository
-	local GIT_DIR=
-	if [[ $(git rev-parse --is-inside-git-dir 2>/dev/null) != false ]] || \
-		! GIT_DIR=$(git rev-parse --git-dir); then
-		return 0
+	if ! GITDIR=$(git rev-parse --git-dir 2>/dev/null); then
+		echo "Not in a git repository" && return 0
 	fi
+	pushd $GITDIR/.. >/dev/null && REPO=$(git rev-parse --show-toplevel) && popd >/dev/null
+	pushd $REPO >/dev/null && GITDIR=$REPO/$(git rev-parse --git-dir) && popd >/dev/null
 
 	# Only do the work under certain conditions. It's cached for later.
-	if ( [[ ! -e $GIT_DIR/.prompt_last ]] ||	# ( first time in this repo ||
-		 [[ -z $LAZY ]] ||						#   we're forcing it ||
-		 										#   ( the last command was a successful git command ) ||
-		 ( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) || 
-		 										#   ( the prompt is out of date ) )
-		 ( [[ -n $WAIT ]] && [[ $(stat -c %Y $GIT_DIR/.prompt_last) < $(date -d "$WAIT" +%s) ]] ) ); then
+	if  [[ ! -e $GITDIR/.prompt_last ]] ||	# first time in this repo ||
+		$FORCE ||							# we're forcing it ||
+		 									# ( the last command was a successful git command ) ||
+		( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) || 
+		 									# ( the prompt is out of date )
+		( [[ -n $WAIT ]] && [[ $(stat -c %Y $GITDIR/.prompt_last) < $(date -d "$WAIT" +%s) ]] ) ; then
 
 		# Determine the current branch
 		local BRANCH=$(git branch | grep '^*' | sed 's/* //')
@@ -64,8 +63,8 @@ function ps1-git() {
 
 		# Collect our statii in this empty array
 		local STATII=();
-		local NEW=$(git ls-files -o --exclude-standard $GIT_DIR/.. | wc -l)
-		local EDITS=$(git ls-files -dm $GIT_DIR/.. | wc -l)
+		local NEW=$(git ls-files -o --exclude-standard $REPO | wc -l)
+		local EDITS=$(git ls-files -dm $REPO | wc -l)
 		local STAGED=$(git diff --name-only --cached | wc -l)
 
 		# How do we display changes in our working directory and index?
@@ -102,23 +101,23 @@ function ps1-git() {
 		fi
 		
 		# Write the prompt string to cache file
-		echo "${BRANCHES}(${STATII})" > $GIT_DIR/.prompt_last
+		echo "${BRANCHES}(${STATII})" > $GITDIR/.prompt_last
 
 		# Color code to white to let us know this is a fresh status
 		echo -en ${BEFORE}
 	else
 		# We're going to display a cached status
-		CACHED=1
+		CACHED=true
 
 		# We'll be displaying a cached status in gray
 		echo -en ${BEFORE_STALE}
 	fi
 
 	# Display the most recently generated status
-	cat $GIT_DIR/.prompt_last
+	cat $GITDIR/.prompt_last
 
 
-	[[ -z ${CACHED} ]] && echo -en ${AFTER} || echo -en ${AFTER_STALE}
+	${CACHED} && echo -en ${AFTER} || echo -en ${AFTER_STALE}
 
 	return $RESULT
 }

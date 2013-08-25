@@ -1,40 +1,44 @@
 #!/bin/bash -e
 
+read -r -d '' HELP <<EOF || :
+Converts a remote git repo's remote branches to tags
+
+Usage:
+    branch2tag [options] <pattern>
+
+Arguments:
+
+    <pattern>: A "git branch --list" pattern describing the set of
+               remote branch names that you wish to convert. Do not
+               include the remote name prefix. Remember to wrap it in
+               single-quotes to avoid bash globbing
+               Examples: 'rest_release*', 'JIRA-*'
+
+Options:
+
+    -d <date> : The date of each branch's HEAD commit is compared
+                against <date>, and if the commit is older, that
+                branch will be converted to a tag.
+                Default: '1 month ago'
+
+    -r <remote> : The remote to modify.
+                  Default: origin
+
+    -s : Performs a dry-run, displaying which branches would be converted
+
+    -h : Displays this help and exits with success
+
+EOF
+
 SIMULATE=false
 REMOTE=origin
 DATE="1 month ago"
-while getopts "sd:r:h" OPT; do
+while getopts ":sd:r:h" OPT; do
 	case $OPT in
 		s) SIMULATE=true;;
 		d) DATE="$OPTARG";;
 		r) REMOTE="$OPTARG";;
-		h)  echo "Converts a remote git repo's remote branches to tags"
-			echo
-			echo "Usage:"
-			echo "    branch2tag [options] <pattern>"
-			echo
-			echo "Arguments:"
-			echo "------------------"
-			echo "    <pattern>: A \"git branch --list\" pattern describing the set of"
-			echo "               remote branch names that you wish to convert. Do not"
-			echo "               include the remote name prefix. Remember to wrap it in"
-			echo "               single-quotes to avoid bash globbing"
-			echo "               Examples: 'rest_release*', 'JIRA-*'"
-			echo
-			echo "Options:"
-			echo "------------------"
-			echo "    -d <date> : The date of each branch's HEAD commit is compared"
-			echo "                against <date>, and if the commit is older, that"
-			echo "                branch will be converted to a tag."
-			echo "                Default: '1 month ago'"
-			echo
-			echo "    -r <remote> : The remote to modify."
-			echo "                  Default: origin"
-			echo
-			echo "    -s : Performs a dry-run, displaying which branches would be converted"
-			echo
-			echo "    -h : Displays this help and exits with success"
-			exit;;
+		h) echo "$HELP" | less; exit;;
 	esac
 done
 shift $((OPTIND-1))

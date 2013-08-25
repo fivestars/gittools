@@ -10,13 +10,10 @@ The installation process takes care not to clobber existing
 scripts. Instead, it moves them to the newly created .githooks
 directory located at the the top-level repository directory.
 
-Usage: install [-a] [-c] <scripts...>
+Usage:
+	install [-c] [-h] <scripts...>
 
 Options:
-    -a  When <scripts...> are provided, automatically enable them
-        by default. Otherwise, you will be prompted to enable each
-        one during the installation process.
-
     -c  Delete all scripts from .git/hooks and .githooks that match
         the standare git hooks' names prior to installing the
         multiplexing scripts for each. This is a cleanup step that
@@ -46,28 +43,27 @@ Arguments:
                         pre-receive update
 
                     Examples: 
+                        commit-msg-jira
                         pre-commit-unittest
-                        commit-msg-syntax
 EOF
 
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
 CLEAR=false
-while getopts "ach" OPT; do
+while getopts ":ch" OPT; do
 	case $OPT in
-	c) CLEAR=true;;
-	h) echo "$HELP" | less; exit;;
-	\?) echo "Invalid option: -$OPTARG" >&2; exit 1;;
+		c) CLEAR=true;;
+		h) echo "$HELP" | less; exit;;
 	esac
 done
 shift $((OPTIND-1))
 
 # Confirm that we're in a git repo
-if [[ $(git rev-parse --is-inside-git-dir 2>/dev/null) != false ]] || \
-	! GITDIR=$(git rev-parse --git-dir); then
+if ! GITDIR=$(git rev-parse --git-dir 2>/dev/null); then
 	echo "Not in a git repository" && exit 1
 fi
-REPO=$(git rev-parse --show-toplevel)
+pushd $GITDIR/.. >/dev/null && REPO=$(git rev-parse --show-toplevel) && popd >/dev/null
+pushd $REPO >/dev/null && GITDIR=$REPO/$(git rev-parse --git-dir) && popd >/dev/null
 
 # Find where this script is being called from
 SRCDIR=$(dirname "$BASH_SOURCE")

@@ -1,5 +1,4 @@
 #! /bin/bash
-# Original source can be found at https://github-ca.corp.zynga.com/jowilson/gittools
 
 function git-subrepo.help {
     cat <<EOF | less
