@@ -95,7 +95,7 @@ for hook in ${HOOKS[*]}; do
 done
 
 # Sample script to demonstrate new hook functionality
-cp $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
+cp --backup=t $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled
