@@ -12,7 +12,9 @@
 
 function ps1-git() {
 
-	local RESULT=$? GITDIR REPO FORCE=false WAIT="5 minutes ago" SHORT BEFORE='\033[1;37m' BEFORE_STALE='\033[0;37m' AFTER AFTER_STALE STALE CACHED=false
+	local RESULT=$? GITDIR REPO FORCE=false WAIT="5 minutes ago" SHORT \
+		  BEFORE='\033[1;37m' BEFORE_STALE='\033[0;37m' AFTER AFTER_STALE \
+		  STALE CACHED=false
 	local OPTIND OPTARG OPTERR OPT
 	while getopts :lw:WsS:c:b:B:a:A: OPT; do
 		case $OPT in
