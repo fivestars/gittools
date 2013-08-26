@@ -121,16 +121,12 @@ fi
 # Otherwise, fail after running the ones we cound find.
 while read line; do
 	section=${line%.enabled*}
-	path=$(git config $section.path) || path=
+	path=$(git config $section.path) || continue
 	hook=${section#hooks\.}
-	if [[ -n $path && ! -e $path ]]; then
+	if [[ ! -e $path ]]; then
 		echo "Could not find hook: $hook"
-		missing="${missing:+$missing\0}$path"
-	elif [[ -z $path ]]; then
-		# Probably an explicitly enabled hook
-		# in the default .githooks directory
-		true
 	elif git config --get-regexp hooks.$HOOK.enabled false &>/dev/null; then
+		missing="${missing:+$missing\0}$path"
 		disabled="${disabled:+$disabled\0}$path"
 	else
 		hooks="${hooks:+$hooks\0}$path"
