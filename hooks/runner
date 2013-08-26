@@ -122,11 +122,12 @@ fi
 while read line; do
 	section=${line%.enabled*}
 	path=$(git config $section.path) || continue
+	echo $path
 	hook=${section#hooks\.}
 	if [[ ! -e $path ]]; then
 		echo "Could not find hook: $hook"
+		missing="${missing:+$missing\0}$hook - $path"
 	elif git config --get-regexp hooks.$HOOK.enabled false &>/dev/null; then
-		missing="${missing:+$missing\0}$path"
 		disabled="${disabled:+$disabled\0}$path"
 	else
 		hooks="${hooks:+$hooks\0}$path"
@@ -178,7 +179,7 @@ fi
 # Fail the hook if we couldn't find one of the hook scripts (even though we ran
 # the ones we found and encountered no errors)
 if [[ -n $missing ]]; then
-	echo "Failed $HOOK checks due to missing hooks:"
+	echo -e "\nFailed $HOOK checks due to missing hooks:"
 	echo -en $missing | xargs -0 -L1 | sed "s/^/	/"
 	exit 1
 fi
