@@ -79,7 +79,7 @@ function capture_on_exit {
 }
 
 # Report which hook is running
-echo -e "\nRunning git hook: $1"
+echo -e "\nRunning $HOOK git hook: $1"
 
 # Create the temorary output buffer
 capture_outfile=$(mktemp)
@@ -169,9 +169,12 @@ else
 		local proceed=$1 success=true; shift
 		while read hook; do
 			$success || echo "Continuing..."
-			bash -e $CAPTURE $hook $* || success=false && $proceed
+			bash -e $CAPTURE $hook $* || { success=false && $proceed; }
 		done < <(sed "s/\0/ \n/g" <<<$*)
-		$success
+		if ! $success; then
+			echo -e "\nFailed one or more $HOOK hooks"
+			$success
+		fi
 	}
 	run-hooks $(git config hooks.$HOOK.continue || git config hooks.continue || echo false) $hooks $*
 fi
