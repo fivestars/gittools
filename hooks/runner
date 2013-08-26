@@ -166,13 +166,13 @@ if is-parallel; then
 else
 	function run-hooks {
 		# $1: true if continue on failure. false if stop on first failure
-		local proceed=$1 success=true; shift
+		local proceed=$1 success=true failed=0; shift
 		while read hook; do
 			$success || echo "Continuing..."
-			bash -e $CAPTURE $hook $* || { success=false && $proceed; }
+			bash -e $CAPTURE $hook $* || { failed=$(( failed + 1 )) && success=false && $proceed; }
 		done < <(sed "s/\0/ \n/g" <<<$*)
 		if ! $success; then
-			echo -e "\nFailed one or more $HOOK hooks"
+			echo -e "\nFailed $failed $HOOK hook(s)"
 			$success
 		fi
 	}
