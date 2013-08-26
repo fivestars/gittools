@@ -74,24 +74,18 @@ Installing hooks:
 	Copying any existing hooks to $REPO/.githooks
 EOF
 
+# Create the .githooks dir
 [[ ! -e $REPO/.githooks ]] && FIRSTTIME=true || FIRSTTIME=false
 mkdir -p $REPO/.githooks
 
+# Move existing hooks to .githooks dir and copy runner script over
 for hook in ${HOOKS[*]}; do
-	if $CLEAR; then
-		rm -f $GITDIR/hooks/$hook $REPO/.githooks/$hook
-	elif [[ -e $GITDIR/hooks/$hook && $(diff $SRCDIR/runner $GITDIR/hooks/$hook | wc -l) > 0 ]]; then
-		if $FIRSTTIME; then
-			mv -v $GITDIR/hooks/$hook $REPO/.githooks/$hook-moved
-		else
-			mv -v --backup=t $GITDIR/hooks/$hook $REPO/.githooks/
-		fi
-	fi
-	cp --backup=t $SRCDIR/runner $GITDIR/hooks/$hook
+	$FIRSTTIME && mv -v $GITDIR/hooks/$hook $REPO/.githooks/$hook-moved
+	cp $SRCDIR/runner $GITDIR/hooks/$hook
 done
 
 # Sample script to demonstrate new hook functionality
-cp --backup=t $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
+cp $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled
@@ -100,8 +94,7 @@ function enable_hooks () {
 	local path name prefix hook answer line section
 	
 	# For each non-base hook, ask if you want to enable it for your repository
-	echo
-	echo "Enabling Hooks:"
+	[[ -n $* ]] && echo -e "\nEnabling Hooks:"
 	
 	for path in $*; do
 		name=$(basename $path)
@@ -149,7 +142,7 @@ function enable_hooks () {
 	fi
 }
 
-# It's possible they're trying to enable hooks from a location other than .githooks
+# It's possible they're trying to install hooks from a location other than .githooks
 [[ -n $* ]] || enable_hooks $*
 
 cat <<EOF
@@ -159,4 +152,5 @@ Installation Complete:
 		git config --get-regexp hooks.*
 		git config --bool  hooks.<hook script name>.enabled true|false
 		git config --unset hooks.<hook script name>.enabled
+
 EOF
