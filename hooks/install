@@ -68,6 +68,23 @@ pushd $REPO >/dev/null && GITDIR=$REPO/$(git rev-parse --git-dir) && popd >/dev/
 # Find where this script is being called from
 SRCDIR=$(dirname "$BASH_SOURCE")
 
+# Check for valid .git/hooks dir
+if [[ -h $GITDIR/hooks ]]; then
+	LINK=$(readlink $GITDIR/hooks)
+	echo "Warning: $GITDIR/hooks is a symlink to $LINK"
+	echo -n "Unlink and proceed? (Y/n) "
+	read ANSWER
+	case $ANSWER in
+		""|y|Y) ;;
+		*) echo "Stopping"; exit 1;;
+	esac
+	rm $GITDIR/hooks
+	mkdir $GITDIR/hooks
+	if ls $GITDIR/$LINK/* &>/dev/null; then
+		cp -rv $GITDIR/$LINK/* $GITDIR/hooks
+	fi
+fi
+
 # Install the git-hooks
 cat <<EOF
 Installing hooks:
@@ -81,7 +98,7 @@ mkdir -p $REPO/.githooks $GITDIR/hooks
 # Move existing hooks to .githooks dir and copy runner script over
 for hook in ${HOOKS[*]}; do
 	if $FIRSTTIME && [[ -e $GITDIR/hooks/$hook ]]; then
-		mv -v $GITDIR/hooks/$hook $REPO/.githooks/$hook-moved
+		mv -v $GITDIR/hooks/$hook $REPO/.githooks/$hook-moved | sed "s/^/	/"
 	fi
 	cp $SRCDIR/runner $GITDIR/hooks/$hook
 	chmod +x $GITDIR/hooks/$hook
