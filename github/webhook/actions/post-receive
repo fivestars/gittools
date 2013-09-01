@@ -5,10 +5,10 @@ HOOK=$(basename $0)
 assign URL=repository.url BEFORE=before AFTER=after REF=ref
 LOC=${URL%/*/*}; LOC=${URL#${LOC}/}
 REPOS_DIR=/var/opt/github-webhook/repos
-REPO_DIR=$REPOS_DIR/$LOC
+REPO_DIR=${REPOS_DIR}/${LOC}.git
 
 # Clone repo if necessary
-[[ -e $REPO_DIR ]] || { mkdir -p $REPO_DIR && git clone --bare $URL $REPO_DIR >/dev/null; }
+[[ -e $REPO_DIR ]] || { mkdir -p $REPO_DIR && git clone --bare $URL $REPO_DIR &>/dev/null; }
 
 if [[ -x $REPO_DIR/hooks/$HOOK ]]; then
     # Navigate to the repository directory
