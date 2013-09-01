@@ -6,32 +6,33 @@ assign URL=repository.url BEFORE=before AFTER=after REF=ref
 LOC=${URL%/*/*}; LOC=${URL#${LOC}/}
 REPOS_DIR=/var/opt/github-webhook/repos
 
-GIT_DIR=${REPOS_DIR}/${LOC}.git
-GIT_WORK_TREE=${REPOS_DIR}/${LOC}
+export GIT_DIR=${REPOS_DIR}/${LOC}.git
+export GIT_WORK_TREE=${REPOS_DIR}/${LOC}
 
 # Clone repo if necessary
 [[ -e $GIT_DIR ]] || { mkdir -p $GIT_DIR && git clone --bare $URL $GIT_DIR &>/dev/null; }
 
-if [[ -x $GIT_DIR/hooks/$HOOK ]]; then
-    # Navigate to the repository directory
-    pushd $GIT_DIR >/dev/null
+# Navigate to the repository directory
+pushd $GIT_DIR >/dev/null
 
-    # Pull down the latest refs
-    git fetch origin +refs/heads/*:refs/heads/* >/dev/null
+# Pull down the latest refs
+git --work-tree . fetch origin +refs/heads/*:refs/heads/* >/dev/null
 
-    # Create a place to check the current ref out to
-    mkdir -p $GIT_WORK_TREE
-    
-    # Checkout the ref being updated
-    export GIT_DIR
-    export GIT_WORK_TREE
-    git checkout -f $REF &>/dev/null
+# Create a place to check the current ref out to
+mkdir -p $GIT_WORK_TREE
 
-    # Navigate to the work directory
-    pushd $GIT_WORK_TREE >/dev/null
+# Checkout the ref being updated
+git checkout -f $REF &>/dev/null
 
-    # Run the hook
-    $GIT_DIR/hooks/$HOOK $BEFORE $AFTER $REF
+# Navigate to the work directory
+pushd $GIT_WORK_TREE >/dev/null
+
+# Run the hook
+if [[ -e $GIT_DIR/hooks/$HOOK ]]; then
+    if [[ -x $GIT_DIR/hooks/$HOOK ]]; then
+	$GIT_DIR/hooks/$HOOK $BEFORE $AFTER $REF
+    else
+	echo "$GIT_DIR/hooks/$HOOK is not executable" >&2
+	exit 1
+    fi
 fi
-
-

@@ -1,10 +1,14 @@
 #! /bin/bash
 
-# Pipe an HTTP request to this script to override the default of using sample-http-post
+# Pipe a WebHook HTTP request to this script to override the default of using sample-http-post
 
-DIR=$(dirname $0)/..
+DIR=$PWD/$(dirname $0)/..
 HOST=${1:-localhost}
 PORT=${2:-9000}
 [[ -t 0 ]] && INPUT=$DIR/test/sample-http-post || INPUT=
 
-cat ${INPUT} | nc $HOST $PORT
+OUTPUT=$(mktemp)
+trap "rm -f $OUTPUT" EXIT
+
+cat $INPUT | nc $HOST $PORT | tee $OUTPUT
+head -n1 $OUTPUT | grep -q "HTTP/1.1 200 OK"

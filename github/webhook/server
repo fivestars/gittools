@@ -33,6 +33,20 @@ EOF
     cat <<<"$DATA"
 }
 
+function reply_http_error {
+    local DATA
+    read -r -d '' DATA
+    cat <<EOF
+HTTP/1.1 500 Internal Server Error
+Content-Type: text/plain
+Content-Length: ${#DATA}
+
+EOF
+    cat <<<"$DATA"
+    log "Failed with message \"$DATA\""
+    exit 1
+}
+
 function loc {
     local LOC=$1
     LOC=${LOC//[/\"][}            # List index open bracket closes previous dict key
@@ -51,16 +65,21 @@ function assign {
 
 function get {
     if [[ -n $1 ]]; then
-	python -c "import json; data = json.loads('$JSON'); print (data$(loc $LOC))"
+	if ! python -c "import json; data = json.loads('$JSON'); print (data$(loc $LOC))" 2>/dev/null; then
+	    echo "Failed to find value for '$1'" >&2
+	    return 1
+	fi
     else
 	echo "$JSON"
     fi    
 }
 
+REPLY=$(mktemp)
+ERROR=$(mktemp)
 export REQUEST=$(mktemp)
 export HEAD=$(mktemp)
 export BODY=$(mktemp)
-trap "rm -f $REQUEST $HEAD $BODY" EXIT
+trap "rm -f $REQUEST $HEAD $BODY $REPLY $ERROR" EXIT
 export JSON=$(python -c "
 import urllib; 
 print (urllib.unquote('$(receive_http | sed s/^payload=//)'.replace('+',' ')))
@@ -69,4 +88,19 @@ export -f loc
 export -f get
 export -f assign
 
-for SCRIPT in $*; do $SCRIPT <<<"$REQUEST"; done | reply_http
+exec 11>&1 12>&2 1>$REPLY 2>$ERROR
+for SCRIPT in $*; do
+    rm -f $ERROR; exec 2>$ERROR
+    if [[ ! -x $SCRIPT ]]; then
+	echo "$SCRIPT is not executable" >&2
+	exec 1>&11 2>&12 11>&- 12>&-
+	cat $ERROR | reply_http_error
+	exit 1
+    elif ! $SCRIPT <<<"$REQUEST"; then
+	exec 1>&11 2>&12 11>&- 12>&-
+	cat $ERROR | sed "s/^/$(basename $SCRIPT): /g"| reply_http_error
+	exit 1
+    fi
+done
+exec 1>&11 2>&12 11>&- 12>&-
+cat $REPLY | reply_http
