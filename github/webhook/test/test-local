@@ -1,0 +1,4 @@
+#! /bin/bash
+
+DIR=$(dirname $0)/..
+sudo -u git $DIR/server $DIR/actions/pre-receive $DIR/actions/post-receive <$DIR/test/sample-http-post

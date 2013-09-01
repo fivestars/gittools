@@ -1,0 +1,66 @@
+#! /bin/bash
+
+function log {
+    logger -t github-webhook -p user.debug "$1" &>/dev/null
+}
+
+function receive_http {
+    local CONTENT_LENGTH LINE DATA
+    set -f
+    while IFS=$'\r\n' read -r LINE; do
+	log "$LINE"
+	case $LINE in
+	    Content-Length:*) LENGTH=$(cut -d ' ' -f 2 <<<$LINE);;
+	    "") break;;
+	esac
+    done
+    read -n $LENGTH -r DATA
+    log "$DATA"
+    echo -n "$DATA"
+}
+
+function reply_http {
+    local DATA
+    read -r -d '' DATA
+    cat <<EOF
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Content-Length: ${#DATA}
+
+EOF
+    cat <<<"$DATA"
+}
+
+function loc {
+    local LOC=$1
+    LOC=${LOC//[/\"][}            # List index open bracket closes previous dict key
+    LOC=${LOC//]./][\"}           # List index closing bracket followed by dict key
+    echo '["'${LOC//./\"][\"}'"]' # Wrap names as dict keys    LOC=${LOC//[/\"][};
+}
+
+function assign {
+    local NAME LOC RULES;
+    for NAME in $*; do
+	read -r NAME LOC < <(echo $NAME | tr '=' ' ');
+	RULES="${RULES:+${RULES};} print('${NAME}=\"%s\";' % (data$(loc $LOC),))";
+    done;
+    eval $(python -c "import json; data = json.loads('$JSON'); $RULES")
+}
+
+function get {
+    if [[ -n $1 ]]; then
+	python -c "import json; data = json.loads('$JSON'); print (data$(loc $LOC))"
+    else
+	echo "$JSON"
+    fi    
+}
+
+export JSON=$(python -c "
+import urllib; 
+print (urllib.unquote('$(receive_http | sed s/^payload=//)'.replace('+',' ')))
+")
+export -f loc
+export -f get
+export -f assign
+
+for SCRIPT in $*; do $SCRIPT; done | reply_http

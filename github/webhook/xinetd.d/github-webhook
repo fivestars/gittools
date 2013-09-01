@@ -1,0 +1,16 @@
+service github-webhook
+{
+	disable		= no
+	type		= UNLISTED
+	id		= github-webhook
+	socket_type	= stream
+	protocol	= tcp
+	user		= git
+	wait		= no
+	port		= 9000
+	log_type	= SYSLOG daemon
+	log_on_success	= HOST PID EXIT
+	log_on_failure	= HOST ATTEMPT
+	server		= /path/to/gittools/github/webhook/server
+	server_args	= /path/to/gittools/github/webhook/actions/pre-receive /path/to/gittools/github/webhook/actions/post-receive
+}
