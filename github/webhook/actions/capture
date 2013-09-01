@@ -1,0 +1,5 @@
+#! /bin/bash
+
+echo "Saving request to ${LOC:=/tmp/github-webhook-request}"
+echo "---------------------------------------------"
+cat $REQUEST | tee ${LOC}

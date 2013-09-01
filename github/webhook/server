@@ -9,14 +9,16 @@ function receive_http {
     set -f
     while IFS=$'\r\n' read -r LINE; do
 	log "$LINE"
+	echo -en "$LINE\r\n"
 	case $LINE in
 	    Content-Length:*) LENGTH=$(cut -d ' ' -f 2 <<<$LINE);;
 	    "") break;;
 	esac
-    done
+    done > $HEAD
+    cp $HEAD $REQUEST
     read -n $LENGTH -r DATA
     log "$DATA"
-    echo -n "$DATA"
+    echo -n "$DATA" | tee -a $REQUEST | tee $BODY
 }
 
 function reply_http {
@@ -55,6 +57,10 @@ function get {
     fi    
 }
 
+export REQUEST=$(mktemp)
+export HEAD=$(mktemp)
+export BODY=$(mktemp)
+trap "rm -f $REQUEST $HEAD $BODY" EXIT
 export JSON=$(python -c "
 import urllib; 
 print (urllib.unquote('$(receive_http | sed s/^payload=//)'.replace('+',' ')))
@@ -63,4 +69,4 @@ export -f loc
 export -f get
 export -f assign
 
-for SCRIPT in $*; do $SCRIPT; done | reply_http
+for SCRIPT in $*; do $SCRIPT <<<"$REQUEST"; done | reply_http

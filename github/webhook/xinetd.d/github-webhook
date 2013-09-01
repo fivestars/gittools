@@ -6,11 +6,17 @@ service github-webhook
 	socket_type	= stream
 	protocol	= tcp
 	user		= git
+	groups		= yes
 	wait		= no
 	port		= 9000
 	log_type	= SYSLOG daemon
 	log_on_success	= HOST PID EXIT
 	log_on_failure	= HOST ATTEMPT
-	server		= /path/to/gittools/github/webhook/server
-	server_args	= /path/to/gittools/github/webhook/actions/pre-receive /path/to/gittools/github/webhook/actions/post-receive
+	server		= /opt/github-webhook/server
+	server_args	= /opt/github-webhook/actions/pre-receive /opt/github-webhook/actions/post-receive
+        only_from       = 127.0.0.1
+
+# GitHub WebHook source ips
+        only_from       += 204.232.175.64/27
+        only_from       += 192.30.252.0/22
 }

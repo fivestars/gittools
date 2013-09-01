@@ -1,4 +1,8 @@
 #! /bin/bash
 
+# Pipe an HTTP request to this script to override the default of using sample-http-post
+
 DIR=$(dirname $0)/..
-sudo -u git $DIR/server $DIR/actions/pre-receive $DIR/actions/post-receive <$DIR/test/sample-http-post
+[[ -t 0 ]] && INPUT=$DIR/test/sample-http-post || INPUT=
+
+cat $INPUT | sudo -u git $DIR/server $DIR/actions/pre-receive $DIR/actions/post-receive

@@ -1,7 +1,10 @@
 #! /bin/bash
 
+# Pipe an HTTP request to this script to override the default of using sample-http-post
+
 DIR=$(dirname $0)/..
 HOST=${1:-localhost}
 PORT=${2:-9000}
+[[ -t 0 ]] && INPUT=$DIR/test/sample-http-post || INPUT=
 
-cat $DIR/test/sample-http-post | nc $HOST $PORT
+cat ${INPUT} | nc $HOST $PORT
