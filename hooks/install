@@ -11,16 +11,11 @@ scripts. Instead, it moves them to the newly created .githooks
 directory located at the the top-level repository directory.
 
 Usage:
-	install [-c] [-h] <scripts...>
+	install [-e] [-h] <scripts...>
 
 Options:
-    -c  Delete all scripts from .git/hooks and .githooks that match
-        the standare git hooks' names prior to installing the
-        multiplexing scripts for each. This is a cleanup step that
-        may become necessary if you run the install script multiple
-        times and the multiplexer script is lexically different than
-        what is currently installed.
-
+    -e  Create example hooks in the new .githooks directory
+    
     -h  Displays this help
 
 Arguments:
@@ -49,21 +44,24 @@ EOF
 
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
 
-CLEAR=false
-while getopts ":ch" OPT; do
+EXAMPLES=false
+while getopts ":eh" OPT; do
 	case $OPT in
-		c) CLEAR=true;;
+		e) EXAMPLES=true;;
 		h) echo "$HELP" | less; exit;;
 	esac
 done
 shift $((OPTIND-1))
 
-# Confirm that we're in a git repo
-if ! GITDIR=$(git rev-parse --git-dir 2>/dev/null); then
-	echo "Not in a git repository" && exit 1
+# Confirm that we have repository and a work tree
+if ! GITDIR=$(git rev-parse --git-dir); then
+	echo "Git dir required but not found" && exit 1
 fi
-pushd $GITDIR/.. >/dev/null && REPO=$(git rev-parse --show-toplevel) && popd >/dev/null
-pushd $REPO >/dev/null && GITDIR=$REPO/$(git rev-parse --git-dir) && popd >/dev/null
+if ! REPO=$(git rev-parse --show-toplevel) || [[ -z $REPO ]]; then
+	echo "Work tree required but not found" && exit 1
+fi
+pushd GITDIR &>/dev/null && GITDIR=$PWD && popd &>/dev/null
+pushd REPO &>/dev/null && REPO=$PWD && popd &>/dev/null
 
 # Find where this script is being called from
 SRCDIR=$(dirname "$BASH_SOURCE")
@@ -105,7 +103,7 @@ for hook in ${HOOKS[*]}; do
 done
 
 # Sample script to demonstrate new hook functionality
-cp $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
+$EXAMPLES && cp $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled

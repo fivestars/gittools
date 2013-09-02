@@ -32,11 +32,15 @@ function ps1-git() {
 	shift $((OPTIND - 1))
 
 	# Quick check to see if we're in a git repository
-	if ! GITDIR=$(git rev-parse --git-dir 2>/dev/null); then
-		echo "Not in a git repository" && return 0
+	GITDIR=$(git rev-parse --git-dir 2>/dev/null) || return 0
+	REPO=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+	BARE=$(git rev-parse --is-bare-repository) || return 0
+	if [[ -z $REPO ]]; then
+		echo -en "$BEFORE[<$($BARE && echo "bare" || echo ".git")>]$AFTER"
+		return 0
 	fi
-	pushd $GITDIR/.. >/dev/null && REPO=$(git rev-parse --show-toplevel) && popd >/dev/null
-	pushd $REPO >/dev/null && GITDIR=$REPO/$(git rev-parse --git-dir) && popd >/dev/null
+	pushd $GITDIR &>/dev/null && GITDIR=$PWD && popd &>/dev/null
+	pushd $REPO &>/dev/null && REPO=$PWD && popd &>/dev/null
 
 	# Only do the work under certain conditions. It's cached for later.
 	if  [[ ! -e $GITDIR/.prompt_last ]] ||	# first time in this repo ||
@@ -65,10 +69,10 @@ function ps1-git() {
 
 		# Collect our statii in this empty array
 		local STATII=()
-		local NEW=$(git ls-files -o --exclude-standard $REPO | wc -l)
-		local EDITS=$(git ls-files -dm $REPO | wc -l)
-		local STAGED=$(git diff --name-only --cached | wc -l)
-
+		local NEW=$(git --work-tree $REPO ls-files -o --exclude-standard | wc -l)
+		local EDITS=$(git --work-tree $REPO ls-files -dm | wc -l)
+		local STAGED=$(git --work-tree $REPO diff --name-only --cached | wc -l)
+		
 		# How do we display changes in our working directory and index?
 		if [[ -z $SHORT ]]; then
 			# Full, spelled-out file states
