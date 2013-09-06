@@ -12,29 +12,15 @@ GITDIR=$(git rev-parse --git-dir 2>/dev/null);
 REPO=$(git rev-parse --show-toplevel 2>/dev/null)
 BARE=$(git rev-parse --is-bare-repository 2>/dev/null)
 if $BARE; then
-	TOPDIR=$GITDIR
 	HOOKSDIR=$GITDIR/.githooks
 elif [[ -n $REPO ]]; then
-	TOPDIR=$REPO
 	HOOKSDIR=$REPO/.githooks
 else
-	TOPDIR=
 	HOOKSDIR=
 fi
 
 # Global git hook list
 GITHOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
-
-# Parse general options
-while [[ -n "$@" ]]; do
-    TOKEN=$1
-    [[ ${TOKEN:0:1} == '-' ]] && shift || break
-    case $TOKEN in
-        --git-dir) export GIT_DIR=$1; shift;;
-        --work-tree) export GIT_WORK_TREE=$1; shift;;
-        *) echo "Invalid option: $TOKEN" >&2; exit 1;;
-    esac
-done
 
 # What command were we given?
 COMMAND=${1:-list}; shift || :
@@ -96,19 +82,19 @@ Description
     you greater flexibility regarding which pieces to run and when.
 
 Usage
-        git hooks [<general options>] [list [<git hook>...]]
-    or: git hooks [<general options>] install [--local] [--global] [--core]
-    or: git hooks [<general options>] uninstall [--local] [--global] [--core]
-    or: git hooks [<general options>] setup [-e]
-    or: git hooks [<general options>] add <path>...
-    or: git hooks [<general options>] rm <custom script name>...
-    or: git hooks [<general options>] enable <custom script name>...
-    or: git hooks [<general options>] disable <custom script name>...
-    or: git hooks [<general options>] run <git hook>|<custom script name>
-    or: git hooks [<general options>] parallel <git hook> [<num>]
-    or: git hooks [<general options>] show-input <git hook> [true|false] 
-    or: git hooks [<general options>] continue [<git hook>] [true|false] 
-    or: git hooks [<general options>] help
+        git hooks [list [<git hook>...]]
+    or: git hooks install [--local] [--global] [--core]
+    or: git hooks uninstall [--local] [--global] [--core]
+    or: git hooks setup [-e]
+    or: git hooks add <path>...
+    or: git hooks rm <custom script name>...
+    or: git hooks enable <custom script name>...
+    or: git hooks disable <custom script name>...
+    or: git hooks run <git hook>|<custom script name>
+    or: git hooks parallel <git hook> [<num>]
+    or: git hooks show-input <git hook> [true|false] 
+    or: git hooks continue [<git hook>] [true|false] 
+    or: git hooks help
 
 Files:
     .githooks
@@ -122,13 +108,6 @@ Files:
         git-hooks config settings will be stored in your repository's config
         file. In the case of a bare repository, the config file is located at
         ./config.
-
-General Options:
-    --git-dir <dir>
-        Exports GIT_DIR internally for consumption by git commands.
-
-    --work-tree <dir>
-        Exports GIT_WORK_TREE internally for consumption by git commands.
 
 Common Arguments:
     <path>...
