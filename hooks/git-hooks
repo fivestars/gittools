@@ -1,0 +1,582 @@
+#! /bin/bash -e
+
+# Globals
+#############################################
+
+# Store the full path of this file
+BASH_SOURCE_DIR=$(cd $(dirname $BASH_SOURCE) && pwd)
+BASH_SOURCE_FULL=$BASH_SOURCE_DIR/$(basename $BASH_SOURCE)
+
+# Populated in _verify_dirs
+GITDIR=
+REPO=
+BARE=
+
+# Global git hook list
+GITHOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
+
+# What command were we given?
+COMMAND=${1:-list}; shift || :
+
+# Functions
+#############################################
+
+function git-hooks._verify_dirs {
+	# Confirm that we have a repository and a work tree
+	if ! REPO=$(git rev-parse --show-toplevel 2>/dev/null) || [[ -z $REPO ]]; then
+		echo "Work tree required but not found" && return 1
+	fi
+	if ! GITDIR=$(git rev-parse --git-dir 2>/dev/null); then
+		echo "Git dir required but not found" && return 1
+	fi
+	BARE=$(git rev-parse --is-bare-repository 2>/dev/null)
+}
+
+function git-hooks._is-git-hook {
+	local HOOK name=$1
+	for HOOK in ${GITHOOKS[@]}; do
+		[[ $HOOK == $name ]] && return 0
+	done
+	return 1
+}
+
+function git-hooks._git-hook-prefix {
+	local HOOK name=$1
+	for HOOK in ${GITHOOKS[@]}; do
+		(echo $name | grep -q ^"$HOOK-") && echo $HOOK && return 0
+	done
+	return 1
+}
+
+function git-hooks.help {
+	echo "TODO"
+	false
+}
+
+function git-hooks.install {
+	local TOKEN LOCAL GLOBAL CORE CHOICE
+    [[ -z $@ ]] && LOCAL=2
+    for TOKEN in "$@"; do
+		case $TOKEN in
+			--local) shift; LOCAL=1;;
+			--global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
+			--core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+			*) echo "Unknown option: $TOKEN"; return 1;;
+		esac
+    done
+    
+    if [[ -n $LOCAL ]]; then
+		git config alias.hooks "!$BASH_SOURCE_FULL" && \
+			echo "Added to your repository's aliases."
+    fi
+
+    if [[ -n $GLOBAL ]]; then
+		git config --global alias.hooks "!$BASH_SOURCE_FULL" && \
+			echo "Added to your global aliases."
+    fi
+
+    if [[ -n $CORE ]]; then
+		echo "This will supercede any \"hooks\" aliases on this machine."
+		echo -n "Continue? (y/N) "
+		read CHOICE
+		case $CHOICE in
+			y|Y) cp $BASH_SOURCE $(git --exec-path) && \
+			echo "Copied to $(git --exec-path)/git-hooks" || \
+			echo "Could not copy to $(git --exec-path)/git-hooks";;
+		esac
+    fi
+}
+ 
+function git-hooks.uninstall {
+    local TOKEN LOCAL GLOBAL CORE CHOICE
+    [[ -z $@ ]] && LOCAL=2
+    for TOKEN in "$@"; do
+		case $TOKEN in
+			--local) shift; LOCAL=1;;
+			--global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
+			--core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+		esac
+    done
+    
+    if [[ -n $LOCAL ]]; then
+		git config --unset alias.hooks && \
+			echo "Removed from your repository's aliases."
+    fi
+
+    if [[ -n $GLOBAL ]]; then
+		git config --global --unset alias.hooks && \
+			echo "Removed from your global aliases."
+    fi
+
+    if [[ -n $CORE && -e "$(git --exec-path)/git-hooks" ]]; then
+		echo "This will remove 'git hooks' from this machine."
+		echo -n "Continue? (y/N) "
+		read CHOICE
+		case $CHOICE in
+			y|Y) rm -f "$(git --exec-path)/git-hooks" && \
+			echo "Deleted $(git --exec-path)/git-hooks" || \
+			echo "Could not remove from $(git --exec-path)";;
+		esac
+    fi
+}
+
+function git-hooks.setup {
+	local LINK ANSWER FIRSTTIME EXAMPLES=false
+
+	while getopts ":e" OPT; do
+		case $OPT in
+			e) EXAMPLES=true;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	if [[ -h $GITDIR/hooks ]]; then
+		LINK=$(readlink $GITDIR/hooks)
+		echo "Warning: $GITDIR/hooks is a symlink to $LINK"
+		echo -n "Unlink and proceed? (Y/n) "
+		read ANSWER
+		case $ANSWER in
+			""|y|Y) ;;
+			*) echo "Stopping"; exit 1;;
+		esac
+		rm $GITDIR/hooks
+		mkdir $GITDIR/hooks
+		if ls $GITDIR/$LINK/* &>/dev/null; then
+			cp -rv $GITDIR/$LINK/* $GITDIR/hooks
+		fi
+	fi
+
+	# Install the git-hooks
+	cat <<EOF
+Installing hooks:
+	Copying any existing hooks to $REPO/.githooks
+EOF
+
+	cat <<"RUNNER" >/tmp/runner
+#! /bin/bash -e
+
+# Make sure we're not accidentally being called from another runner script
+[[ -z $HOOK ]] && export HOOK=$(basename "$0") || exit
+
+# This script will run all configured hooks found in <repository>/.githooks
+# and all hooks found by running:
+#
+#	git config --get-regexp hooks.$HOOK.enabled true
+#
+# It will fail if any of those fail on a command (see 'bash -e') or if 
+# they return non-zero exit codes. You can disable hooks through git
+# configs:
+#
+#	# Disable all custom hooks for this git hook
+#	git config --bool hooks.$HOOK.enabled false
+#
+#	# Disable an individual custom hook
+#	git config --bool hooks.<custom hook>.enabled false
+#
+# The hooks will be run sequentially by default for safety.
+# If you determine that your hooks can be run in parallel, enable it with:
+#
+#	git config --int hooks.$HOOK.parallel <num>
+#
+# where <num> is the number of jobs you wish to start. If 0, <num> will
+# be interpretted as the number of CPUs on the machine. When running in
+# parallel, each hook's output will be buffered until complete. If you
+# choose to not run your hooks in parallel, the output will not be buffered.
+#
+# For safety, you can check for parallel execution in your hook by calling
+# the prevent-parallel function. It checks the value of
+# "git config hooks.$HOOK.parallel" and fails if it is set to anything but 1.
+#
+#	Example:
+#		#! /bin/bash
+#		prevent-parallel   # Will fail the hook unless it is being run sequentially.
+#
+# In addition, you have the option of configuring your hooks to continue even if
+# one fails. If any fail, the overall hook will still fail. This just lets you see
+# multiple failures for one invocation of the hook scripts. Enable this behavior
+# by using the following:
+#
+#	git config --bool hooks.continue true|false
+#	git config --bool hooks.$HOOK.continue true|false
+#
+# The more precise $HOOK setting will take precedence over the general one.
+# These continue configs will be ignored if the hooks are run in parallel.
+
+CAPTURE=/tmp/capture
+
+cat <<"EOF" >$CAPTURE
+#! /bin/bash
+
+function prevent-parallel {
+	if is-parallel; then
+		echo "${0##*/} cannot be run as a parallel job: git config hooks.$HOOK.parallel is set"
+		exit ${1:-1}
+	fi
+}
+
+function capture_on_exit {
+	# Store the exit code
+	result=$?
+
+	# Clear the traps
+	trap - EXIT SIGHUP SIGINT SIGTERM
+
+	# Fix our stdout and stderr
+	is-parallel && exec 1>&11 2>&12 11>&- 12>&-
+
+	# Dump buffer to stdout and delete it
+	is-parallel && cat $1 && rm -f $1
+
+	if [[ $result -ne 0 ]]; then
+		echo "Failed $HOOK git hook:  $2 (exit code $result)"
+	fi
+}
+
+# Report which hook is running
+echo -e "\nRunning $HOOK git hook: $1"
+
+# Create the temorary output buffer
+capture_outfile=$(mktemp)
+trap "rm -f $capture_outfile" EXIT SIGHUP SIGINT SIGTERM
+
+# Display input if requested
+if git config --get-regexp hooks.$HOOK.showinput true &>/dev/null; then
+	echo "----------------"
+	echo "Arguments($(( $# - 1 ))): ${*:2}"
+	echo "Body:"
+	tee $capture_outfile | sed "s/^/	/g"
+	rm -f $capture_outfile
+	echo "----------------"
+fi
+
+# Store stdout and stderr, then redirect them to the buffer
+is-parallel && exec 11>&1 12>&2 &>$capture_outfile
+
+# Provide the prevent-parallel function to the hook scripts
+export -f prevent-parallel
+
+# Set our exit trap to display any errors and do our clean up 
+trap "capture_on_exit $capture_outfile $1" EXIT SIGHUP SIGINT SIGTERM
+
+# Call the wrapped script
+$* 2>&1 | sed "s/^/	/"
+exit ${PIPESTATUS[0]}
+EOF
+
+# Collect the various hooks to run
+hooks=
+missing=
+disabled=
+
+# Look in the default location of .githooks
+if ls .githooks/${HOOK}-* &>/dev/null; then
+	for hook in .githooks/${HOOK}-*; do
+		if [[ -f $hook && ${hook} == ${hook%\~} ]]; then
+			if git config --get-regexp hooks.$HOOK.enabled false &>/dev/null \
+				|| git config --get-regexp hooks\.${hook##*/}.enabled false &>/dev/null; then
+				disabled="${disabled:+$disabled\0}$hook"
+			else
+				hooks="${hooks:+$hooks\0}$hook"
+			fi
+		fi
+	done
+fi
+
+# Make sure that each configured hook can be found,
+# Otherwise, fail after running the ones we cound find.
+while read line; do
+	section=${line%.enabled*}
+	path=$(git config $section.path) || continue
+	echo $path
+	hook=${section#hooks\.}
+	if [[ ! -e $path ]]; then
+		echo "Could not find hook: $hook"
+		missing="${missing:+$missing\0}$hook - $path"
+	elif git config --get-regexp hooks.$HOOK.enabled false &>/dev/null; then
+		disabled="${disabled:+$disabled\0}$path"
+	else
+		hooks="${hooks:+$hooks\0}$path"
+	fi
+done < <(git config --get-regexp hooks\.${HOOK}-.*\.enabled true)
+
+# Display disabled hooks
+if [[ -n $disabled ]]; then
+	echo -e "\nSkipping disabled hooks:"
+	echo -en $disabled | xargs -0 -L1 | sed "s/^/	/"
+fi
+
+# Might be done already
+if [[ -z $hooks ]] && [[ -z $missing ]]; then
+	exit
+fi
+
+function is-parallel {
+	local jobs=$(git config hooks.$HOOK.parallel)
+	[[ -n $jobs && ($jobs == 0 || $jobs -gt 1) ]]
+}
+export -f is-parallel
+
+if is-parallel; then
+	hooks_parallel="-P $(git config hooks.$HOOK.parallel)"
+	if [[ 0 == $(git config hooks.$HOOK.parallel) ]]; then
+		hooks_parallel="-P $(grep -c processor /proc/cpuinfo)"
+	fi
+
+	# Run the hooks through xargs. If any of them fail, xargs will fail and the script
+	# will exit with an error code due to the -e at the top of this script.
+	echo -en $hooks | xargs -0 -L1 $hooks_parallel -I {} bash -e $CAPTURE {} $*
+else
+	function run-hooks {
+		# $1: true if continue on failure. false if stop on first failure
+		# $2: The \0-delimited set of hooks to run
+		local proceed=$1 hooks=$2 hook  success=true failed=0; shift 2
+		exec 3<&0
+		while read hook; do
+			$success || echo "Continuing..."
+			bash -e $CAPTURE $hook $* <&3 || { failed=$(( failed + 1 )) && success=false && $proceed; }
+		done < <(sed "s/\0/ \n/g" <<<$hooks)
+		exec 3<&-
+		if ! $success; then
+			echo -e "\nFailed $failed $HOOK hook(s)"
+			$success
+		fi
+	}
+	run-hooks $(git config hooks.$HOOK.continue || git config hooks.continue || echo false) $hooks $*
+fi
+
+# Fail the hook if we couldn't find one of the hook scripts (even though we ran
+# the ones we found and encountered no errors)
+if [[ -n $missing ]]; then
+	echo -e "\nFailed $HOOK checks due to missing hooks:"
+	echo -en $missing | xargs -0 -L1 | sed "s/^/	/"
+	exit 1
+fi
+RUNNER
+
+	# Create the .githooks dir
+	[[ -e $REPO/.githooks ]] && FIRSTTIME=false || FIRSTTIME=true
+	mkdir -p $REPO/.githooks $GITDIR/hooks
+
+	# Move existing hooks to .githooks dir and copy runner script over
+	for hook in ${GITHOOKS[*]}; do
+		if $FIRSTTIME && [[ -e $GITDIR/hooks/$hook ]]; then
+			mv -v $GITDIR/hooks/$hook $REPO/.githooks/$hook-moved | sed "s/^/	/"
+		fi
+		cp /tmp/runner $GITDIR/hooks/$hook
+		chmod +x $GITDIR/hooks/$hook
+	done
+
+	# Sample script to demonstrate new hook functionality
+	if $EXAMPLES; then
+		if $BARE; then
+			cp $BASH_SOURCE_DIR/example-hooks/pre-receive-report $REPO/.githooks
+		else
+			cp $BASH_SOURCE_DIR/example-hooks/commit-msg-jira $REPO/.githooks
+		fi
+	fi
+}
+
+function git-hooks.list {
+	local HOOKS=${*:-${GITHOOKS[*]}} HOOK hooks hook line section path missing disabled
+
+	for HOOK in ${HOOKS[@]}; do
+		hooks=
+		if ls .githooks/${HOOK}-* &>/dev/null; then
+			for path in .githooks/${HOOK}-*; do
+				if [[ -f ${path} && ${path} == ${path%\~} ]]; then
+					if git config --get-regexp hooks.$HOOK.enabled false &>/dev/null \
+						|| git config --get-regexp hooks\.${path##*/}.enabled false &>/dev/null; then
+						# disabled="${disabled:+$disabled\0}$path"
+						hooks="${hooks:+$hooks\0}$path (disabled)"
+					else
+						hooks="${hooks:+$hooks\0}$path"
+					fi
+				fi
+			done
+		fi
+		
+		while read line; do
+			section=${line%.enabled*}
+			path=$(git config $section.path) || continue
+			# echo $path
+			hook=${section#hooks\.}
+			if [[ ! -e $path ]]; then
+				# echo "Could not find hook: $hook"
+				# missing="${missing:+$missing\0}$hook - $path"
+				hooks="${hooks:+$hooks\0}$hook (missing)"
+			elif git config --get-regexp hooks.$HOOK.enabled false &>/dev/null; then
+				# disabled="${disabled:+$disabled\0}$path"
+				hooks="${hooks:+$hooks\0}$path (disabled)"
+			else
+				hooks="${hooks:+$hooks\0}$path"
+			fi
+		done < <(git config --get-regexp hooks\.${HOOK}-.*\.enabled true)
+
+		if [[ -n $hooks ]]; then
+			echo $HOOK
+			echo "----------------------"
+			echo -en $hooks | xargs -0 -L1
+			echo
+		fi
+	done
+}
+
+function git-hooks.add {
+	local path name prefix HOOK
+	for path in $*; do
+		name=$(basename $path)
+	
+		# Make sure each custom hook is associated with an original git hook
+		if ! HOOK=git-hooks._git-hook-prefix $name; then
+			echo "	Could not determine which git-hook \"$name\" is intended for. Prefix your hook with a proper git-hook name"
+			continue
+		fi
+
+		if [[ '/' != ${path:0:1} ]]; then
+			# It's a relative path
+			pushd $(dirname $path) &>/dev/null
+			if [[ $(git rev-parse --show-toplevel) == $REPO ]]; then
+				# It's within the repository
+				prefix=$(git rev-parse --show-prefix)
+				path=$prefix$name
+			else
+				# It's external to the repository - use absolute path
+				path=$PWD/$name
+			fi
+			popd &>/dev/null
+		fi
+		
+		# Add a path entry to the config for this hook script and enable it
+		git config --path hooks.$name.path $path
+		git config --bool hooks.$name.enabled true
+	done	
+}
+
+function git-hooks.rm {
+	local name
+	for name in $*; do
+		git config --remove-section hooks.$name
+	done
+}
+
+function git-hooks.disable {
+	local name
+	for name in $*; do
+		git config --bool hooks.$name.enabled false
+	done
+}
+
+function git-hooks.enable {
+	local name
+	for name in $*; do
+		git config --unset hooks.$name.enabled
+		if git config hooks.$name.path &>/dev/null; then
+			git config --bool hooks.$name.enabled true
+		fi
+	done
+}
+
+function git-hooks.run {
+	local HOOK
+
+	for HOOK in ${HOOKS[@]}; do
+		(echo $1 | grep -q ^"$hook-") && break || HOOK=
+	done
+	if [[ -z $HOOK ]]; then
+		echo "	Not a valid git hook." >&2
+		return 1
+	fi
+
+	shift
+	pushd $REPO >/dev/null
+	$GITDIR/hooks/$HOOK $*
+	popd >/dev/null
+}
+
+function git-hooks.parallel {
+	local HOOK=$1
+	shift
+
+	if [[ "-" -eq "$1" ]]; then
+		git config --unset hooks.$HOOK.parallel
+	else
+		git config --int hooks.$HOOK.parallel $1
+	fi
+}
+
+function git-hooks.show-input {
+	local HOOK=$1 SHOW=$2
+	if [[ -z $HOOK ]]; then
+		echo "Missing git hook name" >&2
+		return 1
+	elif ! git-hooks._is-git-hook $HOOK; then
+		echo "	First argument must be a valid git hook name" >&2
+		return 1
+	fi
+	
+	if [[ -n $SHOW ]] && ! $SHOW; then
+		git config --unset hooks.$HOOK.showinput
+	else
+		git config --bool hooks.$HOOK.showinput $SHOW
+	fi
+}
+
+function git-hooks.continue {
+	local HOOK=$1 CONTINUE=$2
+
+	if [[ -n $HOOK ]] && [[ -n $CONTINUE ]]; then
+		: # both
+	elif [[ -z $HOOK ]] && [[ -z $CONTINUE ]]; then
+		: # neither
+	else
+		# $HOOK could be one or the other
+		case $HOOK in
+			true|false) CONTINUE=$HOOK; HOOK=;;
+		esac
+	fi
+
+	if [[ -n $HOOK ]] && ! git-hooks._is-git-hook $HOOK; then
+		echo "Hook must be a valid git hook name" >&2
+		return 1
+	fi
+
+	case $CONTINUE in
+		true|false|"") ;;
+		*) echo "Argument must be true, false or omitted" >&2; return 1;;
+	esac
+	
+	if [[ -n $CONTINUE ]] && ! $CONTINUE; then
+		git config --unset hooks.${HOOK:+${HOOK}.}continue
+	else
+		git config --bool hooks.${HOOK:+${HOOK}.}continue $CONTINUE
+	fi
+}
+
+# Determine the correct command to run and pass it the rest of the un-parsed options
+case $COMMAND in
+    # Require a git repository and a .githooks directory for these commands
+    list|add|rm|disable|enable|run|parallel|show-input|continue)
+        if ! git-hooks._verify_dirs; then
+        	exit 1
+        elif [[ ! -e $REPO/.githooks ]]; then
+            echo "No hooks installed for this repository. Use './git-hooks setup' to get started." >&2
+            exit 1
+        fi
+        ;;
+    
+    # These do not require a .githooks directory
+	install|uninstall|setup)
+		if ! git-hooks._verify_dirs; then
+			exit 1
+		fi
+        ;;
+
+    help)
+		;;
+		
+    *)  echo "git: '$COMMAND' is not a git-hooks command. See 'git hooks help'." >&2
+        exit 1
+        ;;
+esac
+
+git-hooks.$COMMAND "$@"

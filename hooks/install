@@ -35,11 +35,12 @@ Arguments:
                         pre-commit
                         prepare-commit-msg
                         pre-rebase
-                        pre-receive update
+                        pre-receive
+                        update
 
                     Examples: 
                         commit-msg-jira
-                        pre-commit-unittest
+                        pre-receive-report
 EOF
 
 HOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge post-receive post-update pre-applypatch pre-commit prepare-commit-msg pre-rebase pre-receive update )
@@ -54,12 +55,13 @@ done
 shift $((OPTIND-1))
 
 # Confirm that we have repository and a work tree
-if ! GITDIR=$(git rev-parse --git-dir); then
+if ! GITDIR=$(git rev-parse --git-dir 2>/dev/null); then
 	echo "Git dir required but not found" && exit 1
 fi
-if ! REPO=$(git rev-parse --show-toplevel) || [[ -z $REPO ]]; then
+if ! REPO=$(git rev-parse --show-toplevel 2>/dev/null) || [[ -z $REPO ]]; then
 	echo "Work tree required but not found" && exit 1
 fi
+BARE=$(git rev-parse --is-bare-repository 2>/dev/null)
 pushd GITDIR &>/dev/null && GITDIR=$PWD && popd &>/dev/null
 pushd REPO &>/dev/null && REPO=$PWD && popd &>/dev/null
 
@@ -103,7 +105,13 @@ for hook in ${HOOKS[*]}; do
 done
 
 # Sample script to demonstrate new hook functionality
-$EXAMPLES && cp $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
+if $EXAMPLES; then
+	if $BARE; then
+		cp $SRCDIR/example-hooks/pre-receive-report $REPO/.githooks
+	else
+		cp $SRCDIR/example-hooks/commit-msg-jira $REPO/.githooks
+	fi
+fi
 
 # Now that we've installed our basic hooks, we need to give them things
 # to run. We do this with the enable_hooks function. Any hooks enabled
@@ -149,7 +157,7 @@ function enable_hooks () {
 		echo -e "\nEnabled Hooks:"
 		while read line; do
 			if [[ $line == ${line%\~} ]] && ! git config --get-regexp hooks\.$line\.enabled false &>/dev/null; then
-				echo "	$PWD/$line"
+				echo "	$REPO/.githooks/$line"
 			fi
 		done < <(ls $REPO/.githooks | grep -f <(echo ${HOOKS[*]} | xargs -n1 | sed s/^/^/g ))
 		while read line; do

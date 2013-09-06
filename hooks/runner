@@ -52,7 +52,6 @@ CAPTURE=/tmp/capture
 cat <<"EOF" >$CAPTURE
 #! /bin/bash
 
-HALTED=false
 function prevent-parallel {
 	if is-parallel; then
 		echo "${0##*/} cannot be run as a parallel job: git config hooks.$HOOK.parallel is set"
@@ -83,6 +82,17 @@ echo -e "\nRunning $HOOK git hook: $1"
 
 # Create the temorary output buffer
 capture_outfile=$(mktemp)
+trap "rm -f $capture_outfile" EXIT SIGHUP SIGINT SIGTERM
+
+# Display input if requested
+if git config --get-regexp hooks.$HOOK.showinput true &>/dev/null; then
+	echo "----------------"
+	echo "Arguments($(( $# - 1 ))): ${*:2}"
+	echo "Body:"
+	tee $capture_outfile | sed "s/^/	/g"
+	rm -f $capture_outfile
+	echo "----------------"
+fi
 
 # Store stdout and stderr, then redirect them to the buffer
 is-parallel && exec 11>&1 12>&2 &>$capture_outfile
@@ -163,11 +173,14 @@ if is-parallel; then
 else
 	function run-hooks {
 		# $1: true if continue on failure. false if stop on first failure
-		local proceed=$1 success=true failed=0; shift
+		# $2: The \0-delimited set of hooks to run
+		local proceed=$1 hooks=$2 hook  success=true failed=0; shift 2
+		exec 3<&0
 		while read hook; do
 			$success || echo "Continuing..."
-			bash -e $CAPTURE $hook $* || { failed=$(( failed + 1 )) && success=false && $proceed; }
-		done < <(sed "s/\0/ \n/g" <<<$*)
+			bash -e $CAPTURE $hook $* <&3 || { failed=$(( failed + 1 )) && success=false && $proceed; }
+		done < <(sed "s/\0/ \n/g" <<<$hooks)
+		exec 3<&-
 		if ! $success; then
 			echo -e "\nFailed $failed $HOOK hook(s)"
 			$success
