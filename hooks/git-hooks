@@ -609,6 +609,11 @@ function git-hooks.list {
     local HOOKS=${*:-${GITHOOKS[*]}} HOOK hooks hook line section path missing disabled
 
     for HOOK in ${HOOKS[@]}; do
+        if ! git-hooks._is-git-hook $HOOK; then
+            echo "Hook must be a valid git hook name: $HOOK" >&2
+            continue
+        fi
+
         hooks=
         if ls $HOOKSDIR/${HOOK}-* &>/dev/null; then
             for path in $HOOKSDIR/${HOOK}-*; do
@@ -752,7 +757,12 @@ function git-hooks.run {
 
 function git-hooks.parallel {
     local HOOK=$1
-    shift
+    shift || { echo "Missing git hook name" >&2; return 1; }
+
+    if ! git-hooks._is-git-hook $HOOK; then
+        echo "Hook must be a valid git hook name" >&2
+        return 1
+    fi
 
     case $1 in
         -) git config --unset hooks.$HOOK.parallel;;
