@@ -691,7 +691,7 @@ function git-hooks.add {
 function git-hooks.rm {
     local name
     for name in $*; do
-        git config --remove-section hooks.$name
+        git config --remove-section hooks.$name || :
     done
 }
 
