@@ -31,21 +31,21 @@ COMMAND=${1:-list}; shift || :
 function git-hooks._require_git_dir {
     # Confirm that we have a repository and a work tree
     if [[ -z $GITDIR ]]; then
-        echo ".git directory required but not found" && return 1
+        echo ".git directory required but not found" >&2 && return 1
     fi
 }
 
 function git-hooks._require_work_tree {
     # Confirm that we have a repository and a work tree
     if [[ -z $REPO ]]; then
-        echo "Work tree required but not found" && return 1
+        echo "Work tree required but not found" >&2 && return 1
     fi
 }
 
 function git-hooks._require_hook_dir {
     # Confirm that we have a repository and a work tree
     if [[ -z $HOOKSDIR ]]; then
-        echo ".githooks directory required but not found" && return 1
+        echo ".githooks directory required but not found" >&2 && return 1
     fi
 }
 
