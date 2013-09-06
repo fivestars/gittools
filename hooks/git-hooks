@@ -164,7 +164,7 @@ Operations:
     setup
         Installs the multiplexer hooks into the .git/hooks directory. These
         scripts are the core of the git-hooks functionality. They are
-        responsible for running any configured custom scritpts according to
+        responsible for running any configured custom scripts according to
         your specifications (sequential vs parallel, disabled, etc.). This
         operation alse creates the .githooks directory and moves any existing
         hooks into it. Any scripts moved in this process will receive the 
@@ -198,7 +198,7 @@ Operations:
         Modify the hooks.<git hook>.parallel config setting. <num> should be
         the desired number of jobs to spawn when running the hook scripts. If
         <num> is not provided, it will display the current setting. If <num>
-        is 0, it will be interpretted as number of CPUs as seen by cpuid. If
+        is 0, it will be interpreted as the number of CPUs as seen by cpuid. If
         <num> is "-", the current setting will be cleared and the hook will
         not be run in parallel mode.
 
@@ -206,7 +206,7 @@ Operations:
         finishes. When complete, the output will be written to stdout.
 
     show-input
-        Modify the hooks.<git hook>>showinput config setting. If no value is
+        Modify the hooks.<git hook>.showinput config setting. If no value is
         provided, it will display the current setting. If this setting is true,
         the received arguments and stdin will be displayed during git hook
         invocation.
@@ -228,7 +228,7 @@ Writing custom git hook scripts:
 
     Once "git-hooks setup" has been called for your repository, creating and
     installing your own hooks is a simple matter of placing them in the newly-
-    created .githooks directory. Your hooks must follow a particulary naming
+    created .githooks directory. Your hooks must follow a particular naming
     convention:
 
         <standard git hook name>-<custom suffix>
@@ -245,7 +245,7 @@ Writing custom git hook scripts:
     in the .git/config file.
 
     Setting the parallel option (see above) will cause all scripts to be run
-    without regard to their conventional order.
+    concurrently without regard to their conventional order.
 
     Preventing parallel execution:
 
