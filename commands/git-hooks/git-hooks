@@ -494,27 +494,29 @@ EOF
 }
 
 function git-hooks.uninstall {
-    local TOKEN LOCAL GLOBAL CORE CHOICE
-    [[ -z $@ ]] && LOCAL=2
+    local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false CHOICE
     for TOKEN in "$@"; do
         case $TOKEN in
-            --local) shift; LOCAL=1;;
-            --global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
-            --core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
+            --local) shift; LOCAL=true;;
+            --global) shift; GLOBAL=true;;
+            --core) shift; CORE=true;;
+            -t|--template) shift; TEMPLATE=true;;
+            *) echo "Unknown option: $TOKEN"; return 1;;
         esac
     done
+    $GLOBAL || $CORE || LOCAL=true
 
-    if [[ -n $LOCAL ]]; then
+    if $LOCAL; then
         git config --unset alias.hooks && \
             echo "Removed from your repository's aliases."
     fi
 
-    if [[ -n $GLOBAL ]]; then
+    if $GLOBAL; then
         git config --global --unset alias.hooks && \
             echo "Removed from your global aliases."
     fi
 
-    if [[ -n $CORE && -e "$(git --exec-path)/git-hooks" ]]; then
+    if $CORE && [[ -e "$(git --exec-path)/git-hooks" ]]; then
         echo "This will remove 'git hooks' from this machine."
         echo -n "Continue? (y/N) "
         read CHOICE
