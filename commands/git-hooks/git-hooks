@@ -228,21 +228,13 @@ function prevent-parallel {
 
 function capture_on_exit {
     # Store the exit code
-    result=$?
-
-    # Clear the traps
-    trap - EXIT SIGHUP SIGINT SIGTERM
-
-    # Fix our stdin, stdout and stderr
-    exec 0<&10
-    is-parallel && exec 1>&11 2>&12 11>&- 12>&-
-
-    if [[ $result -ne 0 ]]; then
-        echo "Failed $HOOK git hook:  $2 (exit code $result)"
+    local RESULT=$?
+    if [[ $RESULT -ne 0 ]]; then
+        echo "[failed $(basename $hook) (exit code $RESULT)]"
     fi
 }
 
-# Create the temorary output buffer
+# Create the temporary output buffer
 read capture_outfile infile hook <<<$1
 shift
 
@@ -250,16 +242,7 @@ shift
 exec 10<&0 0<$infile
 
 # Report which hook is running
-echo "Running $HOOK git hook: $hook"
-
-# Display input if requested
-if git config --get-regexp "hooks\.$HOOK\.showinput" true &>/dev/null; then
-    echo "----------------"
-    echo "Arguments($#): ${*:1}"
-    echo "Body:"
-    tee $capture_outfile | sed "s/^/    /g"
-    echo "----------------"
-fi
+echo "[running $HOOK git hook: $hook]"
 
 # Store stdout and stderr, then redirect them to the buffer
 is-parallel && exec 11>&1 12>&2 &>$capture_outfile
@@ -267,12 +250,21 @@ is-parallel && exec 11>&1 12>&2 &>$capture_outfile
 # Provide the prevent-parallel function to the hook scripts
 export -f prevent-parallel
 
-echo -e "\nOutput for $HOOK git hook: $hook"
+# Display input if requested
+if git config --get-regexp "hooks\.$HOOK\.showinput" true &>/dev/null; then
+    echo "[$# args to $hook ${*:1}]"
+    echo "[input to $hook]"
+    cat $infile # | sed "s|^|$(basename $hook)(in)  \||g"
+fi
 
 # Set our exit trap to display any errors and do our clean up
 trap "capture_on_exit $capture_outfile $hook" EXIT SIGHUP SIGINT SIGTERM
+
 # Call the wrapped script
-$hook $* 2>&1 | sed "s/^/    /"
+if is-parallel || git config --get-regexp "hooks\.$HOOK\.showinput" true &>/dev/null; then
+    echo "[output for $hook]"
+fi
+$hook $* 2>&1 # | sed "s|^|$(basename $hook)(out) \||g"
 exit ${PIPESTATUS[0]}
 EOF
 
@@ -306,13 +298,10 @@ fi
 while read line; do
     section=${line%.enabled*}
     path=$(git config $section.path) || continue
-    echo $path
     hook=${section#hooks\.}
     if [[ ! -e $path ]]; then
-        echo "Could not find hook: $hook"
         missing="${missing:+$missing\0}$hook - $path"
     elif [[ ! -x $path ]]; then
-        echo "Hook is not executable: $hook"
         nonexecutable="${nonexecutable:+$nonexecutable\0}$hook - $path"
     elif git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null; then
         disabled="${disabled:+$disabled\0}$path"
@@ -324,8 +313,8 @@ done < <(git config --get-regexp "hooks\.${HOOK}-.*\.enabled" true)
 
 # Display disabled hooks
 if [[ -n $disabled ]]; then
-    echo -e "\nSkipping disabled hooks:"
-    echo -en $disabled | xargs -0 -L1 | sed "s/^/    /"
+    echo -e "[skipping disabled hooks]"
+    echo -en $disabled | xargs -0 -L1 | sed "s/^\(.*\)/    [\1]/"
 fi
 
 # Might be done already
@@ -338,7 +327,6 @@ function is-parallel {
     [[ -n $jobs && ($jobs == 0 || $jobs -gt 1) ]]
 }
 export -f is-parallel
-
 
 hooks_parallel="-P $(git config hooks.$HOOK.parallel)" || hooks_parallel="-P 1"
 if [[ 0 == $(git config hooks.$HOOK.parallel) ]]; then
@@ -358,21 +346,23 @@ echo -en $hooks | xargs -0 -I {} $hooks_parallel bash -e $CAPTURE {} $*
 # All hooks succeeded, reset our trap for cleanup and manually display the results
 trap "rm -f ${tmpfile}*" EXIT SIGHUP SIGINT SIGTERM
 rm ${tmpfile}.stdin
-cat ${tmpfile}* 2>/dev/null
+cat ${tmpfile}* 2>/dev/null || :
 
-# Fail the hook if we couldn't find one of the hook scripts (even though we ran
-# the ones we found and encountered no errors)
-if [[ -n $missing ]]; then
-    echo -e "\nFailed $HOOK checks due to missing hooks:"
-    echo -en $missing | xargs -0 -L1 | sed "s/^/    /"
-    exit 1
-fi
+if [[ -n $missing || -n $nonexecutable ]]; then
+    # Fail the hook if we couldn't find one of the hook scripts (even though we ran
+    # the ones we found and encountered no errors)
+    if [[ -n $missing ]]; then
+        echo -e "[failed $HOOK checks due to missing hooks]"
+        echo -en $missing | xargs -0 -L1 | sed "s/^\(.*\)/    [\1]/"
+    fi
 
-# Fail the hook if we couldn't execute one of the hook scripts (even though we
-# ran the ones we found and encountered no errors)
-if [[ -n $nonexecutable ]]; then
-    echo -e "\nFailed $HOOK checks due to non-executable hooks:"
-    echo -en $nonexecutable | xargs -0 -L1 | sed "s/^/    /"
+    # Fail the hook if we couldn't execute one of the hook scripts (even though we
+    # ran the ones we found and encountered no errors)
+    if [[ -n $nonexecutable ]]; then
+        echo -e "[failed $HOOK checks due to non-executable hooks]"
+        echo -en $nonexecutable | xargs -0 -L1 | sed "s/^\(.*\)/    [\1]/"
+    fi
+
     exit 1
 fi
 MULTIPLEXER
