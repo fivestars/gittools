@@ -9,7 +9,7 @@
         will call your custom scripts sequentially, or in parallel if you configure
         it to do so.
     
-        This way you can break your monolitchic hooks into individual files, giving
+        This way you can break your monolithic hooks into individual files, giving
         you greater flexibility regarding which pieces to run and when.
     
     Usage
@@ -19,12 +19,11 @@
         or: git hooks setup [-e]
         or: git hooks add <path>...
         or: git hooks rm <custom script name>...
-        or: git hooks enable <custom script name>...
-        or: git hooks disable <custom script name>...
+        or: git hooks enable <git hook>... <custom script name>...
+        or: git hooks disable <git hook>... <custom script name>...
         or: git hooks run <git hook>|<custom script name>
         or: git hooks parallel <git hook> [<num>]
-        or: git hooks show-input <git hook> [true|false] 
-        or: git hooks continue [<git hook>] [true|false] 
+        or: git hooks show-input <git hook> [true|false]
         or: git hooks help
     
     Files:
@@ -89,7 +88,7 @@
             responsible for running any configured custom scripts according to
             your specifications (sequential vs parallel, disabled, etc.). This
             operation alse creates the .githooks directory and moves any existing
-            hooks into it. Any scripts moved in this process will receive the 
+            hooks into it. Any scripts moved in this process will receive the
             "-moved" suffix.
     
             If "-e" is specified an active example script will be created in the new
@@ -133,16 +132,6 @@
             the received arguments and stdin will be displayed during git hook
             invocation.
     
-        continue
-            Modify the hooks.<git-hook>.continue or hooks.continue config settings
-            (if <git-hook> is not provided). If set to true, and any of your hook
-            scripts fail, the overall hook will still fail. This just lets you see
-            multiple failures for one invocation of the hook scripts.
-    
-            The more precise setting will take precedence over the general one.
-            These continue configs will be ignored if the hooks are run in
-            parallel.
-    
         help
             Displays this help message.
     
@@ -176,8 +165,7 @@
             "prevent-parallel" from within your script.
     
             Example:
-           
+    
             #! /bin/bash
             prevent-parallel   # Will exit the hook with a non-zero exit code
                                # unless it is being run sequentially.
-    
