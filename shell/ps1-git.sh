@@ -16,9 +16,9 @@ function ps1-git() {
 		  BEFORE='\033[1;37m' BEFORE_STALE='\033[0;37m' AFTER AFTER_STALE \
 		  STALE CACHED=false
 	local OPTIND OPTARG OPTERR OPT
-	while getopts :lw:WsS:c:b:B:a:A: OPT; do
+	while getopts :fw:WsS:c:b:B:a:A: OPT; do
 		case $OPT in
-			l) FORCE=true;;
+			f) FORCE=true;;
 			w) WAIT="$OPTARG ago";;
 			W) WAIT=;;
 			s) SHORT='|';;
@@ -40,7 +40,7 @@ function ps1-git() {
 		return 0
 	fi
 	pushd $GITDIR &>/dev/null && GITDIR=$PWD && popd &>/dev/null
-	
+
 	# Only do the work under certain conditions. It's cached for later.
 	if  [[ ! -e $GITDIR/.prompt_last ]] ||	# first time in this repo ||
 		$FORCE ||							# we're forcing it ||
@@ -68,9 +68,9 @@ function ps1-git() {
 
 		# Collect our statii in this empty array
 		local STATII=()
-		local NEW=$(git ls-files -o --exclude-standard | wc -l)
-		local EDITS=$(git ls-files -dm | wc -l)
-		local STAGED=$(git diff --name-only --cached | wc -l)
+		local NEW=$(git ls-files -o --exclude-standard $REPO | wc -l)
+		local EDITS=$(git ls-files -dm $REPO | wc -l)
+		local STAGED=$(git diff --name-only --cached| wc -l)
 		
 		# How do we display changes in our working directory and index?
 		if [[ -z $SHORT ]]; then
