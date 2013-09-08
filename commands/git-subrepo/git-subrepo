@@ -5,11 +5,19 @@ function git-subrepo.help {
 
 	read -r -d '' HELP <<EOF || :
 Description
-    git-subrepo is an alternative to git-submodule and git-subtree for
-    referencing external repositories from within your repository. It is meant
-    to be nearly a drop-in replacement for git-submodule, albiet with less
-    "black magic" under the hood. It enables a looser coupling of
-    parent-to-child repositories and attempts to alleviate the pain of
+    git-subrepo is an external git repository dependency tool and can be used
+    as an alternative to git-submodule and git-subtree. It is intended to be a
+    drop-in replacement for git-submodule, albiet with less "black magic" under
+    the hood.
+
+    git-subrepo allows you to have a parent project with one or more external
+    dependencies (other git repos). The external repos have the option of being
+    "pinned" to particular branches, tags or commits. Upon running
+    "git-subrepo update", the dependencies will be synced from their respective
+    remote repositories.
+
+    It differs with git-submodule in that git-subrepo enables a looser coupling
+    of parent-to-child repositories and attempts to alleviate the pain of
     forgetting to commit and push a child repository before pushing a parent
     repository.
 
@@ -34,9 +42,9 @@ Usage:
 Files:
     .gitrepos
         This is where git-subrepo stores its tracking information. Like
-        .gitignore, it is intended to be committed like any other file in your
-        repository. It follows the git config file format and can be manipulated
-        with git-config.
+        .gitignore, it is intended to be committed along with any other file
+        in your repository. It follows the git config file format and can be
+        manipulated with git-config.
 
     .gitignore
         git-subrepo attempts to keep the .gitignore file synchronized with the
@@ -220,61 +228,64 @@ EOF
 }
 
 function git-subrepo.install {
-    local TOKEN LOCAL GLOBAL CORE CHOICE
-    [[ -z $@ ]] && LOCAL=2
+    local TOKEN LOCAL=false GLOBAL=false CORE=false CHOICE
     for TOKEN in "$@"; do
-		case $TOKEN in
-			--local) shift; LOCAL=1;;
-			--global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
-			--core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
-			*) echo "Unknown option: $TOKEN"; return 1;;
-		esac
+        case $TOKEN in
+            --local) shift; LOCAL=true;;
+            --global) shift; GLOBAL=true;;
+            --core) shift; CORE=true;;
+            -t|--template) shift; TEMPLATE=true;;
+            *) echo "Unknown option: $TOKEN"; return 1;;
+        esac
     done
-    
-    if [[ -n $LOCAL ]]; then
-		git config alias.subrepo "!$BASH_SOURCE_FULL" && \
-			echo "Added to your repository's aliases."
+    $GLOBAL || $CORE || LOCAL=true
+
+    if $LOCAL; then
+        git config alias.subrepo "!$BASH_SOURCE_FULL" && \
+            echo "Added \"subrepo\" to your repository's aliases."
     fi
 
-    if [[ -n $GLOBAL ]]; then
-		git config --global alias.subrepo "!$BASH_SOURCE_FULL" && \
-			echo "Added to your global aliases."
+    if $GLOBAL; then
+        git config --global alias.subrepo "!$BASH_SOURCE_FULL" && \
+            echo "Added \"subrepo\" to your global aliases."
     fi
 
-    if [[ -n $CORE ]]; then
-		echo "This will supercede any subrepo aliases on this machine."
-		echo -n "Continue? (y/N) "
-		read CHOICE
-		case $CHOICE in
-			y|Y) cp $BASH_SOURCE $(git --exec-path) && \
-			echo "Copied to $(git --exec-path)/git-subrepo" || \
-			echo "Could not copy to $(git --exec-path)/git-subrepo";;
-		esac
+    if $CORE; then
+        echo "This will supercede any \"subrepo\" aliases on this machine."
+        echo -n "Continue? (y/N) "
+        read CHOICE
+        case $CHOICE in
+            y|Y) cp $BASH_SOURCE $(git --exec-path) && \
+            echo "Copied to $(git --exec-path)/git-subrepo" || \
+            echo "Could not copy to $(git --exec-path)/git-subrepo";;
+        esac
     fi
 }
 
 function git-subrepo.uninstall {
-    local TOKEN LOCAL GLOBAL CORE CHOICE
-    [[ -z $@ ]] && LOCAL=2
+    local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false CHOICE
     for TOKEN in "$@"; do
-		case $TOKEN in
-			--local) shift; LOCAL=1;;
-			--global) shift; [[ $LOCAL == 2 ]] && LOCAL=; GLOBAL=1;;
-			--core) shift; [[ $LOCAL == 2 ]] && LOCAL=; CORE=1;;
-		esac
+        case $TOKEN in
+            --local) shift; LOCAL=true;;
+            --global) shift; GLOBAL=true;;
+            --core) shift; CORE=true;;
+            -t|--template) shift; TEMPLATE=true;;
+            *) echo "Unknown option: $TOKEN"; return 1;;
+        esac
     done
-    
-    if [[ -n $LOCAL ]]; then
+    $GLOBAL || $CORE || LOCAL=true
+
+    if $LOCAL; then
 		git config --unset alias.subrepo && \
 			echo "Removed from your repository's aliases."
     fi
 
-    if [[ -n $GLOBAL ]]; then
+    if $GLOBAL; then
 		git config --global --unset alias.subrepo && \
 			echo "Removed from your global aliases."
     fi
 
-    if [[ -n $CORE && -e "$(git --exec-path)/git-subrepo" ]]; then
+    if $CORE && [[ -e "$(git --exec-path)/git-subrepo" ]]; then
 		echo "This will remove 'git subrepo' from this machine."
 		echo -n "Continue? (y/N) "
 		read CHOICE
