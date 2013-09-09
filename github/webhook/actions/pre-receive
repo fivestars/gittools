@@ -30,9 +30,9 @@ pushd $GIT_WORK_TREE >/dev/null
 # Run the hook
 if [[ -e $GIT_DIR/hooks/$HOOK ]]; then
     if [[ -x $GIT_DIR/hooks/$HOOK ]]; then
-	$GIT_DIR/hooks/$HOOK $BEFORE $AFTER $REF
+        $GIT_DIR/hooks/$HOOK $BEFORE $AFTER $REF
     else
-	echo "$GIT_DIR/hooks/$HOOK is not executable" >&2
-	exit 1
+        echo "$GIT_DIR/hooks/$HOOK is not executable" >&2
+        exit 1
     fi
 fi

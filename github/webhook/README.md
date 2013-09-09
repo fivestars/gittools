@@ -31,13 +31,13 @@ These scripts will enable you to quickly get a simple HTTP server up and running
 
 You can choose which scripts are run in response to a WebHook request. They are run sequentially in the order they appear in the server_args list.
 
-Scripts will have access to the inbound request data via stdin in addition to the $REQUEST environment variable. Also some helper functions are provided for convenience:
+Scripts will have access to the inbound request data from two sources: stdin and the $REQUEST environment variable. Also some helper functions are provided for convenience:
 
 Content written to stdout and stderr will become the content of the HTTP response. While GitHub discards the response, this can be helpful during the debugging process. Output written to stdout will be cumulative over your scripts and will be returned in the success response. Output written to stderr will be cleared before each script such that only the error content from the failed script will be sent back in the error response. 
 
 ### Variables
 
-* $REQUEST: The original request
+* $REQUEST: The full original request
 * $HEAD: The HTTP headers from the request
 * $BODY: The HTTP content from the request
 * $JSON: The decoded contents of the payload body

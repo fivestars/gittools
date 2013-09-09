@@ -79,7 +79,6 @@ ERROR=$(mktemp)
 export REQUEST=$(mktemp)
 export HEAD=$(mktemp)
 export BODY=$(mktemp)
-trap "rm -f $REQUEST $HEAD $BODY $REPLY $ERROR" EXIT
 export JSON=$(python -c "
 import urllib; 
 print (urllib.unquote('$(receive_http | sed s/^payload=//)'.replace('+',' ')))
@@ -87,6 +86,8 @@ print (urllib.unquote('$(receive_http | sed s/^payload=//)'.replace('+',' ')))
 export -f loc
 export -f get
 export -f assign
+
+trap "rm -f $REPLY $ERROR $REQUEST $HEAD $BODY" EXIT
 
 exec 11>&1 12>&2 1>$REPLY 2>$ERROR
 for SCRIPT in $*; do
