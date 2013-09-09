@@ -2,7 +2,7 @@
 
 # Pipe a WebHook HTTP request to this script to override the default of using sample-http-post
 
-DIR=$PWD/$(dirname $0)/..
-[[ -t 0 ]] && INPUT=$DIR/test/sample-http-post || INPUT=
+DIR=$(cd $(dirname $0) && pwd)
+[[ -t 0 ]] && INPUT=$DIR/sample-http-post || INPUT=
 
-cat $INPUT | sudo -u git $DIR/server $DIR/actions/pre-receive $DIR/actions/post-receive
+cat $INPUT | sudo -u git $DIR/../server $DIR/../actions/post-receive

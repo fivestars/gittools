@@ -2,10 +2,10 @@
 
 # Pipe a WebHook HTTP request to this script to override the default of using sample-http-post
 
-DIR=$PWD/$(dirname $0)/..
+DIR=$(cd $(dirname $0) && pwd)
+[[ -t 0 ]] && INPUT=$DIR/sample-http-post || INPUT=
 HOST=${1:-localhost}
 PORT=${2:-9000}
-[[ -t 0 ]] && INPUT=$DIR/test/sample-http-post || INPUT=
 
 OUTPUT=$(mktemp)
 trap "rm -f $OUTPUT" EXIT

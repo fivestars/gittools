@@ -8,12 +8,12 @@ function receive_http {
     local CONTENT_LENGTH LINE DATA
     set -f
     while IFS=$'\r\n' read -r LINE; do
-	log "$LINE"
-	echo -en "$LINE\r\n"
-	case $LINE in
-	    Content-Length:*) LENGTH=$(cut -d ' ' -f 2 <<<$LINE);;
-	    "") break;;
-	esac
+        log "$LINE"
+        echo -en "$LINE\r\n"
+        case $LINE in
+            Content-Length:*) LENGTH=$(cut -d ' ' -f 2 <<<$LINE);;
+            "") break;;
+        esac
     done > $HEAD
     cp $HEAD $REQUEST
     read -n $LENGTH -r DATA
@@ -51,26 +51,26 @@ function loc {
     local LOC=$1
     LOC=${LOC//[/\"][}            # List index open bracket closes previous dict key
     LOC=${LOC//]./][\"}           # List index closing bracket followed by dict key
-    echo '["'${LOC//./\"][\"}'"]' # Wrap names as dict keys    LOC=${LOC//[/\"][};
+    echo '["'${LOC//./\"][\"}'"]' # Wrap names as dict keys
 }
 
 function assign {
     local NAME LOC RULES;
     for NAME in $*; do
-	read -r NAME LOC < <(echo $NAME | tr '=' ' ');
-	RULES="${RULES:+${RULES};} print('${NAME}=\"%s\";' % (data$(loc $LOC),))";
+        read -r NAME LOC < <(echo $NAME | tr '=' ' ');
+        RULES="${RULES:+${RULES};} print('${NAME}=\"%s\";' % (data$(loc $LOC),))";
     done;
     eval $(python -c "import json; data = json.loads('$JSON'); $RULES")
 }
 
 function get {
     if [[ -n $1 ]]; then
-	if ! python -c "import json; data = json.loads('$JSON'); print (data$(loc $LOC))" 2>/dev/null; then
-	    echo "Failed to find value for '$1'" >&2
-	    return 1
-	fi
+        if ! python -c "import json; data = json.loads('$JSON'); print (data$(loc $LOC))" 2>/dev/null; then
+            echo "Failed to find value for '$1'" >&2
+            return 1
+        fi
     else
-	echo "$JSON"
+        echo "$JSON"
     fi    
 }
 
@@ -93,14 +93,14 @@ exec 11>&1 12>&2 1>$REPLY 2>$ERROR
 for SCRIPT in $*; do
     rm -f $ERROR; exec 2>$ERROR
     if [[ ! -x $SCRIPT ]]; then
-	echo "$SCRIPT is not executable" >&2
-	exec 1>&11 2>&12 11>&- 12>&-
-	cat $ERROR | reply_http_error
-	exit 1
+        echo "$SCRIPT is not executable" >&2
+        exec 1>&11 2>&12 11>&- 12>&-
+        cat $ERROR | reply_http_error
+        exit 1
     elif ! $SCRIPT <<<"$REQUEST"; then
-	exec 1>&11 2>&12 11>&- 12>&-
-	cat $ERROR | sed "s/^/$(basename $SCRIPT): /g"| reply_http_error
-	exit 1
+        exec 1>&11 2>&12 11>&- 12>&-
+        cat $ERROR | sed "s/^/$(basename $SCRIPT): /g"| reply_http_error
+        exit 1
     fi
 done
 exec 1>&11 2>&12 11>&- 12>&-

@@ -27,7 +27,7 @@ These scripts will enable you to quickly get a simple HTTP server up and running
     * port: Port to listen on (default: 9000)
     * server_args: The scripts to run when a request arrives
 
-## Actions (Scripts)
+## Actions (Your Scripts)
 
 You can choose which scripts are run in response to a WebHook request. They are run sequentially in the order they appear in the server_args list.
 

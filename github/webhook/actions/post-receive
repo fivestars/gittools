@@ -16,7 +16,7 @@ export GIT_WORK_TREE=${REPOS_DIR}/${LOC}
 pushd $GIT_DIR >/dev/null
 
 # Pull down the latest refs
-git --work-tree . fetch origin +refs/heads/*:refs/heads/* >/dev/null
+git fetch origin +refs/heads/*:refs/heads/* >/dev/null
 
 # Create a place to check the current ref out to
 mkdir -p $GIT_WORK_TREE
