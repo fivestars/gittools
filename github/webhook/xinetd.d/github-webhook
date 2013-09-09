@@ -13,7 +13,7 @@ service github-webhook
 	log_on_success	= HOST PID EXIT
 	log_on_failure	= HOST ATTEMPT
 	server			= /opt/github-webhook/server
-	server_args		= /opt/github-webhook/actions/pre-receive /opt/github-webhook/actions/post-receive
+	server_args		= /opt/github-webhook/actions/capture /opt/github-webhook/actions/post-receive
 	only_from		= 127.0.0.1
 
 	# GitHub WebHook source ips
