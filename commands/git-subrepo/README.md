@@ -1,4 +1,4 @@
-    Description
+    Description:
         git-subrepo is an external git repository dependency tool and can be used
         as an alternative to git-submodule and git-subtree. It is intended to be a
         drop-in replacement for git-submodule, albiet with less "black magic" under
@@ -23,7 +23,7 @@
                                                 [(-p|--pin) <pin>] <repository>
                                                 [<path>]
         or: git subrepo [<general options>] rm [-d|--delete] [<path>...]
-        or: git subrepo [<general options>] checkout <path> [<pin>]
+        or: git subrepo [<general options>] checkout <path> [-b] [<pin>]
         or: git subrepo [<general options>] update [-i <indent>] [--no-recurse] 
                                                 [--no-command] [--top] [--rebase]
                                                 [(-p|--pin) (c|k|o|s)] [<path>...]
@@ -67,9 +67,9 @@
             so on. Default value is 3.
     
     Common Arguments:
-    	<path>...
-    	    This indicates that the command will operate over a subset of the
-    	    sub-repos. If not specified, the command will iterate over the complete
+        <path>...
+            This indicates that the command will operate over a subset of the
+            sub-repos. If not specified, the command will iterate over the complete
             set of sub-repos.
     
             The format of <path>... is a list of path-strings, separated by spaces.
@@ -127,7 +127,7 @@
                     By default, git-subrepo will recursively descend into the new
                     sub-repo and perform a 'git-subrepo update' on them (also
                     recursive). Use this if you only want to clone this new
-    				sub-repo but none of its sub-repos.
+                    sub-repo but none of its sub-repos.
     
         rm
             Removes a sub-repo from this repository. This removes the sub-repo's
@@ -159,7 +159,7 @@
                     By default, git-subrepo will recursively descend into each
                     sub-repo and perform a 'git-subrepo update' on them (also
                     recursive). Use this if you only want to update this top-level
-    				repo.
+                    repo.
     
                 --no-command
                     By default, git-subrepo will execute any command configured by
