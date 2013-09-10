@@ -11,7 +11,7 @@ GITHOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge
 read -r -d '' HELP <<'HELP' || :
 git-hooks - A tool for managing and invoking custom git hook scripts.
 
-Description
+Description:
     git-hooks is a tool to facilitate git hook management, specifically being
     able to store your hooks within the repository itself and simply reference
     them from a multiplexer hook installed in the .git/hooks directory.
@@ -25,7 +25,7 @@ Description
     This way you can break your monolithic hooks into individual files, giving
     you greater flexibility regarding which pieces to run and when.
 
-Usage
+Usage:
         git hooks  # equivalent to list
     or: $(git-hooks._extract_desc list)
     or: $(git-hooks._extract_desc install)
@@ -118,7 +118,7 @@ HELP
 read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
 #! /bin/bash -e
 
-# Make sure we're not accidentally being called from another runner script
+# Make sure we're not accidentally being called from another multiplexer script
 [[ -z $HOOK ]] && export HOOK=$(basename "$0") || exit
 
 # This script will run all configured hooks found in <repository>/.githooks
@@ -156,7 +156,7 @@ read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
 #                           # it is being run sequentially.
 #
 
-CAPTURE=/tmp/capture
+CAPTURE=/tmp/capture.$$
 
 cat <<"EOF" >$CAPTURE
 #! /bin/bash
@@ -276,6 +276,7 @@ fi
 
 # Set a trap to display any bufferred output and clean up our temp files
 trap "rm -f ${tmpfile}.stdin; cat ${tmpfile}* 2>/dev/null; rm -f ${tmpfile}*" EXIT SIGHUP SIGINT SIGTERM
+
 # Save our stdin so we can feed it to multiple scripts
 [[ -t 0 ]] && touch ${tmpfile}.stdin || cat >${tmpfile}.stdin
 
@@ -284,7 +285,7 @@ trap "rm -f ${tmpfile}.stdin; cat ${tmpfile}* 2>/dev/null; rm -f ${tmpfile}*" EX
 echo -en $hooks | xargs -0 -I {} $hooks_parallel bash -e $CAPTURE {} $*
 
 # All hooks succeeded, reset our trap for cleanup and manually display the results
-trap "rm -f ${tmpfile}*" EXIT SIGHUP SIGINT SIGTERM
+trap "rm -f ${tmpfile}* /tmp/capture.$$" EXIT SIGHUP SIGINT SIGTERM
 rm ${tmpfile}.stdin
 cat ${tmpfile}* 2>/dev/null || :
 
@@ -319,11 +320,11 @@ GITDIR=$(git rev-parse --git-dir 2>/dev/null) || :
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || :
 BARE=$(git rev-parse --is-bare-repository 2>/dev/null) || :
 if $BARE; then
-    HOOKSDIR=$GITDIR/.githooks
     TOPDIR=$GITDIR
+    HOOKSDIR=$TOPDIR/.githooks
 elif [[ -n $REPO ]]; then
-    HOOKSDIR=$REPO/.githooks
     TOPDIR=$REPO
+    HOOKSDIR=$TOPDIR/.githooks
 else
     HOOKSDIR=
     TOPDIR=

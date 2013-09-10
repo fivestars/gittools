@@ -57,7 +57,7 @@ function loc {
 function assign {
     local NAME LOC RULES;
     for NAME in $*; do
-        read -r NAME LOC < <(echo $NAME | tr '=' ' ');
+        read -r NAME LOC <<<${NAME//=/ }
         RULES="${RULES:+${RULES};} print('${NAME}=\"%s\";' % (data$(loc $LOC),))";
     done;
     eval $(python -c "import json; data = json.loads('$JSON'); $RULES")
@@ -89,7 +89,7 @@ export -f assign
 
 trap "rm -f $REPLY $ERROR $REQUEST $HEAD $BODY" EXIT
 
-exec 11>&1 12>&2 1>$REPLY 2>$ERROR
+exec 11>&1 12>&2 1>$REPLY
 for SCRIPT in $*; do
     rm -f $ERROR; exec 2>$ERROR
     if [[ ! -x $SCRIPT ]]; then
@@ -99,7 +99,7 @@ for SCRIPT in $*; do
         exit 1
     elif ! $SCRIPT <<<"$REQUEST"; then
         exec 1>&11 2>&12 11>&- 12>&-
-        cat $ERROR | sed "s/^/$(basename $SCRIPT): /g"| reply_http_error
+        cat $ERROR | sed "s/^/$(basename $SCRIPT): /g" | reply_http_error
         exit 1
     fi
 done
