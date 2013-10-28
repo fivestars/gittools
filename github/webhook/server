@@ -65,7 +65,7 @@ function assign {
 
 function get {
     if [[ -n $1 ]]; then
-        if ! python -c "import json; data = json.loads('$JSON'); print (data$(loc $LOC))" 2>/dev/null; then
+        if ! python -c "import json; data = json.loads('$JSON'); print (data$(loc $1))" 2>/dev/null; then
             echo "Failed to find value for '$1'" >&2
             return 1
         fi
