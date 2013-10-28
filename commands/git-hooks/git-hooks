@@ -6,9 +6,11 @@ GITHOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge
            post-receive post-update pre-applypatch pre-commit prepare-commit-msg
            pre-rebase pre-receive update )
 
-# Help
+# HELP
 #############################################
-read -r -d '' HELP <<HELP || :
+read -r -d '' HELP <<'HELP' || :
+git-hooks - A tool for managing and invoking custom git hook scripts.
+
 Description
     git-hooks is a tool to facilitate git hook management, specifically being
     able to store your hooks within the repository itself and simply reference
@@ -24,26 +26,31 @@ Description
     you greater flexibility regarding which pieces to run and when.
 
 Usage
-        git hooks [list [<git hook>...]]
-    or: git hooks install [--local] [--global] [--core] [-t|--template] [-s|--setup]
-    or: git hooks uninstall [--local] [--global] [--core]
-    or: git hooks setup [-e]
-    or: git hooks add <path>...
-    or: git hooks rm <custom script name>...
-    or: git hooks enable <git hook>... <custom script name>...
-    or: git hooks disable <git hook>... <custom script name>...
-    or: git hooks run <git hook>|<custom script name>
-    or: git hooks parallel <git hook> [<num>]
-    or: git hooks show-input <git hook> [true|false]
-    or: git hooks help
+        git hooks  # equivalent to list
+    or: $(git-hooks._extract_desc list)
+    or: $(git-hooks._extract_desc install)
+    or: $(git-hooks._extract_desc uninstall)
+    or: $(git-hooks._extract_desc setup)
+    or: $(git-hooks._extract_desc add)
+    or: $(git-hooks._extract_desc rm)
+    or: $(git-hooks._extract_desc enable)
+    or: $(git-hooks._extract_desc disable)
+    or: $(git-hooks._extract_desc run)
+    or: $(git-hooks._extract_desc parallel)
+    or: $(git-hooks._extract_desc show-input)
+    or: $(git-hooks._extract_desc config)
+    or: $(git-hooks._extract_desc help)
 
 Files:
-    .githooks
+    .githooks/
         This is where git-hooks will look for default hook scripts. Place your
         hook scripts in here rather than .git/hooks. Your hook scripts should
-        follow the naming convention:
+        be executable and follow the naming convention:
 
             <standard git hook name>-<custom suffix>
+
+        Examples: .githooks/pre-commit-style.sh
+                  .githooks/pre-commit-unittest.py
 
     .git/config
         git-hooks config settings will be stored in your repository's config
@@ -58,7 +65,7 @@ Common Arguments:
         The command accepts a list of git hook names. These names should only
         include the names of the standard git hooks:
 
-$(echo ${GITHOOKS[*]} | xargs -L1 -n1 | sed 's/^/                    /g')
+$(echo ${GITHOOKS[*]} | xargs -L1 -n1 | sed 's/^/            /g')
 
     <custom script name>...
         The command accepts a list of hook script names. These names may
@@ -67,80 +74,7 @@ $(echo ${GITHOOKS[*]} | xargs -L1 -n1 | sed 's/^/                    /g')
         not considered valid items in this list.
 
 Operations:
-    list
-        Lists the currently available custom scripts for each standard git
-        hook. If any are disabled, it is noted in the output.
-
-    install
-        Installs 'git-hooks' into any of three locations.
-            --local: The repository's aliases (default)
-            --global: Your global aliases
-            --core: Copies this file into this machine's git core directory.
-                    Any 'hooks' aliases will no longer be effective.
-            -t|--template: Installs the multiplexer scripts into
-                           ~/.gittemplate/hooks. This will cause any newly
-                           cloned or created repositories to automatically
-                           populate their .git/hooks directories.
-            -s|--setup: Run the setup command once installation is complete.
-
-    uninstall
-        Undoes the effects of 'install'.
-
-    setup
-        Installs the multiplexer hooks into the .git/hooks directory. These
-        scripts are the core of the git-hooks functionality. They are
-        responsible for running any configured custom scripts according to
-        your specifications (sequential vs parallel, disabled, etc.). This
-        operation alse creates the .githooks directory and moves any existing
-        hooks into it. Any scripts moved in this process will receive the
-        "-moved" suffix.
-
-        If "-e" is specified an active example script will be created in the new
-        .githooks directory.
-
-    add
-        Adds new scripts to be run when their associated git hooks are invoked.
-        <path>... should be a list of paths to external custom scripts. Any
-        paths indicating scripts residing in the .githooks directory will be
-        ignored.
-
-    rm
-        Removes previously added scripts from being run during git hook
-        invocation.
-
-    enable
-        Enables a script to be run during git hook invocation. Scripts are
-        enabled by default.
-
-    disable
-        Prevents a script from being run during git hook invocation.
-
-    run
-        Runs a git hook or an individual custom script. stdin and any extra
-        arguments will be forwarded to the designated target.
-
-    parallel
-        Modify the hooks.<git hook>.parallel config setting. <num> should be
-        the desired number of jobs to spawn when running the hook scripts. If
-        <num> is not provided, it will display the current setting. If <num>
-        is 0, it will be interpreted as the number of CPUs as seen by cpuid. If
-        <num> is "-", the current setting will be cleared and the hook will
-        not be run in parallel mode.
-
-        When running in parallel, each script's output is buffered until it
-        finishes. When complete, the output will be written to stdout.
-
-    show-input
-        Modify the hooks.<git hook>.showinput config setting. If no value is
-        provided, it will display the current setting. If this setting is true,
-        the received arguments and stdin will be displayed during git hook
-        invocation.
-
-    config
-        Simply lists all hooks-related git config settings.
-
-    help
-        Displays this help message.
+$(git-hooks._extract_help)
 
 Writing custom git hook scripts:
 
@@ -435,15 +369,61 @@ function git-hooks._git-hook-prefix {
     return 1
 }
 
+function git-hooks._extract_desc {
+    local COMMAND=$1
+    echo "git hooks ${COMMAND} $(git-hooks._extract_doc -d git-hooks.${COMMAND} | sed 's/^\s*//g')"
+}
+
+function git-hooks._extract_help {
+    local COMMAND=$1
+    while read COMMAND; do
+        echo -e "\n    ${COMMAND}"
+        git-hooks._extract_doc -h git-hooks.${COMMAND} | sed 's/^/    /g'
+    done < <(grep '$(git-hooks._extract_desc [-a-zA-Z0-9]\+)$' ${BASH_SOURCE} | sed 's/.* \(.*\))/\1/g')
+}
+
+function git-hooks._extract_doc {
+    local TYPE
+    local OPT OPTIND OPTARG
+    while getopts ":dh" OPT; do
+        case $OPT in
+            d) TYPE=DESC;;
+            h) TYPE=HELP;;
+        esac
+    done
+    shift $((OPTIND-1))
+    type $1 | awk "NR==1,/<<${TYPE}/{next}/^${TYPE}/,NR==0{next}{print}"
+}
+
 function git-hooks.help {
+    : <<HELP
+    Displays this help message.
+HELP
+
     if [[ -t 0 ]]; then
-        echo "$HELP" | less
+        eval "echo \"$HELP\"" | less
     else
         echo "$HELP"
     fi
 }
 
 function git-hooks.install {
+    : <<DESC
+    [--local] [--global] [--core] [-t|--template] [-s|--setup]
+DESC
+    : <<HELP
+    Installs 'git-hooks' into any of three locations.
+        --local: The repository's aliases (default)
+        --global: Your global aliases
+        --core: Copies this file into this machine's git core directory.
+                Any 'hooks' aliases will no longer be effective.
+        -t|--template: Installs the multiplexer scripts into
+                       ~/.gittemplate/hooks. This will cause any newly
+                       cloned or created repositories to automatically
+                       populate their .git/hooks directories.
+        -s|--setup: Run the setup command once installation is complete.
+HELP
+
     local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false SETUP=false CHOICE
     for TOKEN in "$@"; do
         case $TOKEN in
@@ -505,6 +485,12 @@ EOF
 }
 
 function git-hooks.uninstall {
+    : <<DESC
+    [--local] [--global] [--core]
+DESC
+    : <<HELP
+    Undoes the effects of 'install'.
+HELP
     local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false CHOICE
     for TOKEN in "$@"; do
         case $TOKEN in
@@ -540,8 +526,24 @@ function git-hooks.uninstall {
 }
 
 function git-hooks.setup {
-    local LINK ANSWER FIRSTTIME EXAMPLES=false
+    : <<DESC
+    [-e]
+DESC
+    : <<HELP
+    Installs the multiplexer hooks into the .git/hooks directory. These
+    scripts are the core of the git-hooks functionality. They are
+    responsible for running any configured custom scripts according to
+    your specifications (sequential vs parallel, disabled, etc.). This
+    operation alse creates the .githooks directory and moves any existing
+    hooks into it. Any scripts moved in this process will receive the
+    "-moved" suffix.
 
+    If "-e" is specified an active example script will be created in the new
+    .githooks directory.
+HELP
+
+    local LINK ANSWER FIRSTTIME EXAMPLES=false
+    local OPT OPTIND OPTARG
     while getopts ":e" OPT; do
         case $OPT in
             e) EXAMPLES=true;;
@@ -573,7 +575,8 @@ function git-hooks.setup {
     mkdir -p $HOOKSDIR $GITDIR/hooks
 
     # Move existing hooks to .githooks dir and copy runner script over
-	$FIRSTTIME && echo "    Copying any existing hooks to $HOOKSDIR"
+    $FIRSTTIME && echo "    Copying any existing hooks to $HOOKSDIR"
+    echo $?
     for hook in ${GITHOOKS[*]}; do
         if $FIRSTTIME \
             && [[ -e $GITDIR/hooks/$hook ]] \
@@ -611,7 +614,7 @@ echo
 
 EOF
             chmod +x $HOOKSDIR/pre-receive-report
-		else
+        else
             cat <<EOF >$HOOKSDIR/commit-msg-jira
 #! /bin/bash
 
@@ -630,8 +633,8 @@ MESSAGE
 
 # Fails unless the JIRA- prefix is found in the commit msg
 if ! grep "JIRA-[[:digit:]]\+" &>/dev/null <$1; then
-	echo "You must provide a JIRA-#### ticket number in your commit message."
-	exit 1
+    echo "You must provide a JIRA-#### ticket number in your commit message."
+    exit 1
 fi
 EOF
             chmod +x $HOOKSDIR/commit-msg-jira
@@ -640,7 +643,15 @@ EOF
 }
 
 function git-hooks.list {
-    local HOOKS=${*:-${GITHOOKS[*]}} HOOK hooks hook line section path
+    : <<DESC
+    [<git hook>...]
+DESC
+    : <<HELP
+    Lists the currently available custom scripts for each standard git
+    hook. If any are disabled, it is noted in the output.
+HELP
+
+    local HOOKS=${*:-${GITHOOKS[*]}} HOOK DISABLED hooks hook line section path
 
     for HOOK in ${HOOKS[@]}; do
         if ! git-hooks._is-git-hook $HOOK; then
@@ -648,13 +659,16 @@ function git-hooks.list {
             continue
         fi
 
+        DISABLED=false
+        git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null && DISABLED=true
         hooks=
         if ls $HOOKSDIR/${HOOK}-* &>/dev/null; then
             for path in $HOOKSDIR/${HOOK}-*; do
                 if [[ -f ${path} && -n ${path%%*~} ]]; then
-                    if git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null \
-                        || git config --get-regexp "hooks\.${path##*/}\.enabled" false &>/dev/null; then
+                    if git config --get-regexp "hooks\.${path##*/}\.enabled" false &>/dev/null; then
                         hooks="${hooks:+$hooks\0}$path (disabled)"
+                    elif $DISABELD;then
+                        hooks="${hooks:+$hooks\0}$path (disabled by $HOOK)"
                     elif [[ ! -x $path ]]; then
                         hooks="${hooks:+$hooks\0}$path (not executable)"
                     else
@@ -673,7 +687,7 @@ function git-hooks.list {
                 hooks="${hooks:+$hooks\0}$path (missing)"
             elif [[ ! -x $path ]]; then
                 hooks="${hooks:+$hooks\0}$path (not executable)"
-            elif git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null; then
+            elif $DISABLED; then
                 hooks="${hooks:+$hooks\0}$path (disabled)"
             else
                 hooks="${hooks:+$hooks\0}$path"
@@ -681,7 +695,8 @@ function git-hooks.list {
         done < <(git config --get-regexp "hooks\.${HOOK}-.*\.enabled" true)
 
         if [[ -n $hooks ]]; then
-            echo $HOOK
+            echo -n $HOOK
+            $DISABLED && echo " (disabled)" || echo
             echo "----------------------"
             echo -en $hooks | xargs -0 -L1
             echo
@@ -690,6 +705,16 @@ function git-hooks.list {
 }
 
 function git-hooks.add {
+    : <<DESC
+    <path>...
+DESC
+    : <<HELP
+    Adds new scripts to be run when their associated git hooks are invoked.
+    <path>... should be a list of paths to external custom scripts. Any
+    paths indicating scripts residing in the .githooks directory will be
+    ignored.
+HELP
+
     local path name prefix HOOK
     for path in $*; do
         name=$(basename $path)
@@ -728,6 +753,13 @@ function git-hooks.add {
 }
 
 function git-hooks.rm {
+    : <<DESC
+    <custom script name>...
+DESC
+    : <<HELP
+    Removes previously added scripts from being run during git hook invocation.
+HELP
+
     local name
     for name in $*; do
         git config --remove-section hooks.$name || :
@@ -735,16 +767,44 @@ function git-hooks.rm {
 }
 
 function git-hooks.enable {
-    local name
+    : <<DESC
+    <git hook>... <custom script name>...
+DESC
+    : <<HELP
+    Enables a script to be run during git hook invocation. Scripts are
+    enabled by default.
+HELP
+
+    local name QUIET=false
+    local TYPE OPT OPTIND OPTARG
+    while getopts ":q" OPT; do
+        case $OPT in
+            q) QUIET=true;;
+        esac
+    done
+    shift $((OPTIND-1))
+
     for name in $*; do
-        git config --unset hooks.$name.enabled
+        git config --unset hooks.$name.enabled || :
+        echo hey
         if git config hooks.$name.path &>/dev/null; then
             git config --bool hooks.$name.enabled true
         fi
     done
+
+    if ! $QUIET; then
+        git-hooks.list $*
+    fi
 }
 
 function git-hooks.disable {
+    : <<DESC
+    <git hook>... <custom script name>...
+DESC
+    : <<HELP
+    Prevents a script from being run during git hook invocation.
+HELP
+
     local name
     for name in $*; do
         git config --bool hooks.$name.enabled false
@@ -752,6 +812,14 @@ function git-hooks.disable {
 }
 
 function git-hooks.run {
+    : <<DESC
+    <git hook>|<custom script name>
+DESC
+    : <<HELP
+    Runs a git hook or an individual custom script. stdin and any extra
+    arguments will be forwarded to the designated target.
+HELP
+
     local HOOK name path
 
     if git-hooks._is-git-hook $1; then
@@ -795,6 +863,21 @@ function git-hooks.run {
 }
 
 function git-hooks.parallel {
+    : <<DESC
+    <git hook> [<num>]
+DESC
+    : <<HELP
+    Modify the hooks.<git hook>.parallel config setting. <num> should be
+    the desired number of jobs to spawn when running the hook scripts. If
+    <num> is not provided, it will display the current setting. If <num>
+    is 0, it will be interpreted as the number of CPUs as seen by cpuid. If
+    <num> is "-", the current setting will be cleared and the hook will
+    not be run in parallel mode.
+
+    When running in parallel, each script's output is buffered until it
+    finishes. When complete, the output will be written to stdout.
+HELP
+
     local HOOK=$1
     shift || { echo "Missing git hook name" >&2; return 1; }
 
@@ -804,12 +887,22 @@ function git-hooks.parallel {
     fi
 
     case $1 in
-        -) git config --unset hooks.$HOOK.parallel;;
+        -) git config --unset hooks.$HOOK.parallel || :;;
         *) git config --int hooks.$HOOK.parallel $1;;
     esac
 }
 
 function git-hooks.show-input {
+    : <<DESC
+    <git hook> [true|false]
+DESC
+    : <<HELP
+    Modify the hooks.<git hook>.showinput config setting. If no value is
+    provided, it will display the current setting. If this setting is true,
+    the received arguments and stdin will be displayed during git hook
+    invocation.
+HELP
+
     local HOOK=$1 SHOW=$2
     if [[ -z $HOOK ]]; then
         echo "Missing git hook name" >&2
@@ -825,25 +918,30 @@ function git-hooks.show-input {
     esac
 
     if [[ -n $SHOW ]] && ! $SHOW; then
-        git config --unset hooks.$HOOK.showinput
+        git config --unset hooks.$HOOK.showinput || :
     else
         git config --bool hooks.$HOOK.showinput $SHOW
     fi
 }
 
 function git-hooks.config {
+    : <<HELP
+    Simply lists all hooks-related git config settings.
+HELP
+
     local FILES=( global system )
 
     if git-hooks._require_git_dir; then
         FILES=( ${FILES[@]} local )
     fi
-    
+
     for location in ${FILES[@]}; do
         echo "[$location]"
         git config --$location --get-regexp hooks || :
         echo
     done
 }
+
 
 # Determine the correct command to run and pass it the rest of the un-parsed options
 case $COMMAND in
