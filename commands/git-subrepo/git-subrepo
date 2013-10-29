@@ -1,9 +1,6 @@
 #! /bin/bash
 
-function git-subrepo.help {
-    local HELP
-
-    read -r -d '' HELP <<EOF || :
+read -r -d '' HELP <<'HELP' || :
 Description:
     git-subrepo is an external git repository dependency tool and can be used
     as an alternative to git-submodule and git-subtree. It is intended to be a
@@ -22,22 +19,18 @@ Description:
     repository.
 
 Usage:
-        git subrepo [<general options>] [list [-v|--verbose] [<path>...]]
-    or: git subrepo [<general options>] install [--local] [--global] [--core]
-    or: git subrepo [<general options>] uninstall [--local] [--global] [--core]
-    or: git subrepo [<general options>] add [--no-recurse] [-f|--force]
-                                            [(-p|--pin) <pin>] <repository>
-                                            [<path>]
-    or: git subrepo [<general options>] rm [-d|--delete] [<path>...]
-    or: git subrepo [<general options>] checkout <path> [-b] [<pin>]
-    or: git subrepo [<general options>] update [-i <indent>] [--no-recurse] 
-                                            [--no-command] [--top] [--rebase]
-                                            [(-p|--pin) (c|k|o|s)] [<path>...]
-    or: git subrepo [<general options>] postupdate [--set] [--clear]
-                                            [<command>]
-    or: git subrepo [<general options>] foreach <command> [<path>...]
-    or: git subrepo [<general options>] publish [-f] [-m <message>]
-    or: git subrepo [<general options>] help
+        git subrepo [<general options>]  # equivalent to list
+    or: $(git-subrepo.util.extract_desc list)
+    or: $(git-subrepo.util.extract_desc install)
+    or: $(git-subrepo.util.extract_desc uninstall)
+    or: $(git-subrepo.util.extract_desc add)
+    or: $(git-subrepo.util.extract_desc rm)
+    or: $(git-subrepo.util.extract_desc checkout)
+    or: $(git-subrepo.util.extract_desc update)
+    or: $(git-subrepo.util.extract_desc postupdate)
+    or: $(git-subrepo.util.extract_desc foreach)
+    or: $(git-subrepo.util.extract_desc publish)
+    or: $(git-subrepo.util.extract_desc help)
 
 Files:
     .gitrepos
@@ -95,139 +88,40 @@ Common Arguments:
                 All sub-repos between the two, inclusive
 
 Operations:
-    list
-        Lists the current sub-repos for this repository.
-            
-            -v|--verbose
-                Displays the sub-repo's remote URL as well
+$(git-subrepo.util.extract_help)
+HELP
 
-    install
-        Installs 'git-subrepo' into any of three locations.
-            
-            --local
-                The repository's aliases (default)
-
-            --global
-                Your global aliases
-            
-            --core
-                Copies this file into this machine's git core directory. Any
-                'subrepo' aliases will no longer be effective.
-
-    uninstall
-        Undoes the effects of 'install'.
-
-    add
-        Adds a new repository as a sub-repo. This will clone the repository to
-        <path> and create an entry in the .gitrepos file.
- 
-            -f|--force
-                If the <path> already exists, continue to update the .gitrepos
-                file and leave the directory alone.
-
-            -p|--pin <pin>
-                The repository will be checked out to <pin>, and it will be
-                recorded in the sub-repo's .gitrepos entry.
-
-            --no-recurse
-                By default, git-subrepo will recursively descend into the new
-                sub-repo and perform a 'git-subrepo update' on them (also
-                recursive). Use this if you only want to clone this new
-                sub-repo but none of its sub-repos.
-
-    rm
-        Removes a sub-repo from this repository. This removes the sub-repo's
-        entry from the .gitrepos file.
-
-            -d|--delete
-                the sub-repo's directory will be removed from the working
-                directory as well.
-
-    checkout
-        Checks out a sub-repo to the given <pin>. This pin will be recorded in
-        the sub-repo's .gitrepos entry. If no <pin> is given, the sub-repo's pin
-        value will be cleared from the .gitrepos file.
-
-            -b
-                Attempt to create a new branch with name <pin>
-
-    update
-        Clones any new repositories found in the .gitrepos file, or just
-        <path>... sub-repos if provided, and pulls down any changes for the
-        existing sub-repos. If the sub-repo's remote repository differs from
-        the one in the .gitrepos file and there are unpushed changes in that
-        sub-repo, you will be prompted to resolve these changes before
-        continuing. If a the sub-repo has a pin in the .gitrepos file and it
-        differs from the sub-repo's currently checked out pin, you will be
-        given a choice of how to handle it: switch, keep, overwrite.
-
-            --no-recurse
-                By default, git-subrepo will recursively descend into each
-                sub-repo and perform a 'git-subrepo update' on them (also
-                recursive). Use this if you only want to update this top-level
-                repo.
-
-            --no-command
-                By default, git-subrepo will execute any command configured by
-                postupdate. Prevent that behavior with this.
-
-            --top
-                Perform a pull on this top-level repo first.
-
-            --rebase
-                Perform a rebase rather than a merge when pulling commits from
-                the sub-repos' origins. Also used with the --top pull.
-
-            --pin (c|k|o|s)
-                Use this value rather than waiting for user input when prompted
-                to handle a difference in .gitrepos pin and current pin.
-
-    postupdate
-        Configures commands to be run after a successful update. Call with no
-        options or command to list the currently configured commands. Call with
-        <command> but no options to simply add a command to the list.
-
-            --set
-                Replace all currently configured commands with the one provided
-                on the command line.
-
-            --clear
-                Remove all currently configured commands.
-
-    publish
-        Safely pushes the current .gitrepos file. It iterates through the
-        sub-repo list in the .gitrepos file and verifies that they are checked
-        out locally and that each pin(if present) exists in its remote
-        repository.
-        
-        You are then prompted to continue with the add-commit-push of the
-        .gitrepos file. This operation will not proceed unless the index
-        (stage) is clean.
-
-             -f
-                 The prompt will be suppressed, and it will proceed
-                 as if you had entered 'y'.
-
-             -m
-                 The commit message. Defaults to 'Updating sub-repos'
-
-    foreach
-        Execute <command> for each sub-repo in the .gitrepos file or for each
-        <path>.
-
-    help
-        Displays this help message.
-
-EOF
+function git-subrepo.help {
+    : <<HELP
+    Displays this help message.
+HELP
 
     if [[ -t 0 ]]; then
-        echo "$HELP" | less
+        eval "echo \"$HELP\"" | less
     else
         echo "$HELP"
     fi
 }
 
 function git-subrepo.install {
+    : <<DESC
+    [--local] [--global] [--core]
+DESC
+    : <<HELP
+    Installs 'git-subrepo' into any of three locations.
+HELP
+    : <<PARAMS
+    --local
+        The repository's aliases (default)
+
+    --global
+        Your global aliases
+    
+    --core
+        Copies this file into this machine's git core directory. Any
+        'subrepo' aliases will no longer be effective.
+PARAMS
+
     local TOKEN LOCAL=false GLOBAL=false CORE=false CHOICE
     for TOKEN in "$@"; do
         case $TOKEN in
@@ -263,6 +157,13 @@ function git-subrepo.install {
 }
 
 function git-subrepo.uninstall {
+    : <<DESC
+    [--local] [--global] [--core]
+DESC
+    : <<HELP
+    Undoes the effects of 'install'.
+HELP
+
     local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false CHOICE
     for TOKEN in "$@"; do
         case $TOKEN in
@@ -298,6 +199,31 @@ function git-subrepo.uninstall {
 }
 
 function git-subrepo.add {
+    : <<DESC
+    [--no-recurse] [-f|--force]
+    [(-p|--pin) <pin>] <repository>
+    [<path>]
+DESC
+    : <<HELP
+    Adds a new repository as a sub-repo. This will clone the repository to
+    <path> and create an entry in the .gitrepos file.
+HELP
+    : <<PARAMS
+    -f|--force
+        If the <path> already exists, continue to update the .gitrepos
+        file and leave the directory alone.
+
+    -p|--pin <pin>
+        The repository will be checked out to <pin>, and it will be
+        recorded in the sub-repo's .gitrepos entry.
+
+    --no-recurse
+        By default, git-subrepo will recursively descend into the new
+        sub-repo and perform a 'git-subrepo update' on them (also
+        recursive). Use this if you only want to clone this new
+        sub-repo but none of its sub-repos.
+PARAMS
+
     local TOKEN DIR URL CURL PIN FORCE=false RECURSE=true COLOROPT="-c no"
 
     for TOKEN in "$@"; do
@@ -388,6 +314,19 @@ function git-subrepo.add {
 }
 
 function git-subrepo.rm {
+    : <<DESC
+    [-d|--delete] [<path>...]
+DESC
+    : <<HELP
+    Removes a sub-repo from this repository. This removes the sub-repo's
+    entry from the .gitrepos file.
+HELP
+    : <<PARAMS
+    -d|--delete
+        the sub-repo's directory will be removed from the working
+        directory as well.
+PARAMS
+
     local TOKEN DELETE=false DIR
 
     for TOKEN in "$@"; do
@@ -417,6 +356,44 @@ function git-subrepo.rm {
 }
 
 function git-subrepo.update {
+    : <<DESC
+    [-i <indent>] [--no-recurse] 
+    [--no-command] [--top] [--rebase]
+    [(-p|--pin) (c|k|o|s)] [<path>...]
+DESC
+    : <<HELP
+    Clones any new repositories found in the .gitrepos file, or just
+    <path>... sub-repos if provided, and pulls down any changes for the
+    existing sub-repos. If the sub-repo's remote repository differs from
+    the one in the .gitrepos file and there are unpushed changes in that
+    sub-repo, you will be prompted to resolve these changes before
+    continuing. If a the sub-repo has a pin in the .gitrepos file and it
+    differs from the sub-repo's currently checked out pin, you will be
+    given a choice of how to handle it: switch, keep, overwrite.
+HELP
+    : <<PARAMS
+    --no-recurse
+        By default, git-subrepo will recursively descend into each
+        sub-repo and perform a 'git-subrepo update' on them (also
+        recursive). Use this if you only want to update this top-level
+        repo.
+
+    --no-command
+        By default, git-subrepo will execute any command configured by
+        postupdate. Prevent that behavior with this.
+
+    --top
+        Perform a pull on this top-level repo first.
+
+    --rebase
+        Perform a rebase rather than a merge when pulling commits from
+        the sub-repos' origins. Also used with the --top pull.
+
+    --pin (c|k|o|s)
+        Use this value rather than waiting for user input when prompted
+        to handle a difference in .gitrepos pin and current pin.
+PARAMS
+
     local TOKEN ARGS=" " COMMIT TOP=false REBASE RECURSE=true FORMAT \
         PREFIX INDENT CHOICEOPT CHOICE COLOROPT="-c no" DIR URL PIN CPIN \
         DPIN COMMAND=true MESSAGE=""
@@ -621,6 +598,28 @@ function git-subrepo.update {
 }
 
 function git-subrepo.publish {
+    : <<DESC
+    [-f] [-m <message>]
+DESC
+    : <<HELP
+    Safely pushes the current .gitrepos file. It iterates through the
+    sub-repo list in the .gitrepos file and verifies that they are checked
+    out locally and that each pin(if present) exists in its remote
+    repository.
+    
+    You are then prompted to continue with the add-commit-push of the
+    .gitrepos file. This operation will not proceed unless the index
+    (stage) is clean.
+HELP
+    : <<PARAMS
+     -f
+         The prompt will be suppressed, and it will proceed
+         as if you had entered 'y'.
+
+     -m
+         The commit message. Defaults to 'Updating sub-repos'
+PARAMS
+
     local MESSAGE="Updating sub-repos" PUSH
     
     local OPTARG OPTIND OPTERR OPT CHOICE
@@ -695,6 +694,19 @@ function git-subrepo.publish {
 }
 
 function git-subrepo.checkout {
+    : <<DESC
+    <path> [-b] [<pin>]
+DESC
+    : <<HELP
+    Checks out a sub-repo to the given <pin>. This pin will be recorded in
+    the sub-repo's .gitrepos entry. If no <pin> is given, the sub-repo's pin
+    value will be cleared from the .gitrepos file.
+HELP
+    : <<PARAMS
+    -b
+        Attempt to create a new branch with name <pin>
+PARAMS
+
     if [[ $# -lt 1 ]]; then
         echo "Must provide <path>" >&2
         return 1
@@ -744,6 +756,24 @@ function git-subrepo.checkout {
 }
 
 function git-subrepo.postupdate {
+    : <<DESC
+    [--set] [--clear]
+    [<command>]
+DESC
+    : <<HELP
+    Configures commands to be run after a successful update. Call with no
+    options or command to list the currently configured commands. Call with
+    <command> but no options to simply add a command to the list.
+HELP
+    : <<PARAMS
+    --set
+        Replace all currently configured commands with the one provided
+        on the command line.
+
+    --clear
+        Remove all currently configured commands.
+PARAMS
+
     local TOKEN COMMAND
     for TOKEN in "$@"; do
         [[ ${TOKEN:0:1} == '-' ]] && shift || break
@@ -764,6 +794,14 @@ function git-subrepo.postupdate {
 }
 
 function git-subrepo.foreach {
+    : <<DESC
+    <command> [<path>...]
+DESC
+    : <<HELP
+    Execute <command> for each sub-repo in the .gitrepos file or for each
+    <path>.
+HELP
+
     local COMMAND=$1 DIR URL PIN
     shift
 
@@ -783,6 +821,17 @@ function git-subrepo.foreach {
 }
 
 function git-subrepo.list {
+    : <<DESC
+    [-v|--verbose] [<path>...]
+DESC
+    : <<HELP
+    Lists the current sub-repos for this repository.
+HELP
+    : <<PARAMS
+    -v|--verbose
+        Displays the sub-repo's remote URL as well
+PARAMS
+
     local FORMAT DIR URL PIN HASH COMMIT PINLEN CPIN PIN_ERR REM_ERR BRANCH \
           REFLOG REFHASH REFNAME COUNT=0 ARGS=" " VERBOSE=false INDENT
 
@@ -877,6 +926,40 @@ function git-subrepo.list {
         fi
 
     done < <(git-subrepo.util.expand-repos "$@")
+}
+
+function git-subrepo.util.extract_desc {
+    local COMMAND=$1
+    echo -n "git subrepo [<general options>] ${COMMAND}"
+    git-subrepo.util.extract_doc -d git-subrepo.${COMMAND} | head -n1 | sed 's/^\s*/ /g'
+    git-subrepo.util.extract_doc -d git-subrepo.${COMMAND} | tail -n+2 | sed 's/^\s*/                                           /g'
+}
+
+function git-subrepo.util.extract_help {
+    local COMMAND=$1
+    while read COMMAND; do
+        echo -en "\n    ${COMMAND}: "
+        git-subrepo.util.extract_doc -h git-subrepo.${COMMAND} | head -n1 | sed 's/^\s*//g'
+        git-subrepo.util.extract_doc -h git-subrepo.${COMMAND} | tail -n+2 | sed 's/^\s*/            /g'
+        echo
+        git-subrepo.util.extract_doc -p git-subrepo.${COMMAND} | sed 's/^/    /g'
+    done < <(grep '$(git-subrepo.util.extract_desc [-a-zA-Z0-9]\+)$' ${BASH_SOURCE} | sed 's/.* \(.*\))/\1/g')
+}
+
+function git-subrepo.util.extract_doc {
+    local TYPE
+    local OPT OPTIND OPTARG
+    while getopts "dhp" OPT; do
+        case $OPT in
+            d) TYPE=DESC;;
+            h) TYPE=HELP;;
+            p) TYPE=PARAMS;;
+        esac
+    done
+    shift $((OPTIND-1))
+    if [[ -n $1 ]]; then
+        type $1 | awk "NR==1,/<<${TYPE}/{next}/^${TYPE}/,NR==0{next}{print}"
+    fi
 }
 
 function git-subrepo.util.c {
