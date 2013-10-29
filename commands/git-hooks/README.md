@@ -1,171 +1,186 @@
-    Description
-        git-hooks is a tool to facilitate git hook management, specifically being
-        able to store your hooks within the repository itself and simply reference
-        them from a multiplexer hook installed in the .git/hooks directory.
-    
-        The expected usage is to write an arbitrary number of individual hook
-        scripts for a single standard git hook and store them in the .githooks
-        directory. When git invokes the multiplexer script in .git/hooks, it
-        will call your custom scripts sequentially, or in parallel if you configure
-        it to do so.
-    
-        This way you can break your monolithic hooks into individual files, giving
-        you greater flexibility regarding which pieces to run and when.
-    
-    Usage
-            git hooks [list [<git hook>...]]
-        or: git hooks install [--local] [--global] [--core]
-        or: git hooks uninstall [--local] [--global] [--core]
-        or: git hooks setup [-e]
-        or: git hooks add <path>...
-        or: git hooks rm <custom script name>...
-        or: git hooks enable <git hook>... <custom script name>...
-        or: git hooks disable <git hook>... <custom script name>...
-        or: git hooks run <git hook>|<custom script name>
-        or: git hooks parallel <git hook> [<num>]
-        or: git hooks show-input <git hook> [true|false]
-        or: git hooks help
-    
-    Files:
-        .githooks
-            This is where git-hooks will look for default hook scripts. Place your
-            hook scripts in here rather than .git/hooks. Your hook scripts should
-            follow the naming convention:
-    
-                <standard git hook name>-<custom suffix>
-    
-        .git/config
-            git-hooks config settings will be stored in your repository's config
-            file. In the case of a bare repository, the config file is located at
-            ./config.
-    
-    Common Arguments:
-        <path>...
-            The command accepts a list of path strings.
-    
-        <git hook>...
-            The command accepts a list of git hook names. These names should only
-            be the names of the standard git hooks:
-    
-                        applypatch-msg
-                        commit-msg
-                        post-checkout
-                        post-commit
-                        post-merge
-                        post-receive
-                        post-update
-                        pre-applypatch
-                        pre-commit
-                        prepare-commit-msg
-                        pre-rebase
-                        pre-receive
-                        update
-    
-        <custom script name>...
-            The command accepts a list of hook script names. These names may
-            indicate scripts in the repo's .githooks directory, or external
-            scripts installed via 'git-hooks add'. Standard git hook names are
-            not considered valid items in this list.
-    
-    Operations:
-        list
-            Lists the currently available custom scripts for each standard git
-            hook. If any are disabled, it is noted in the output.
-    
-        install
-            Installs 'git-hooks' into any of three locations.
-                --local: The repository's aliases (default)
-                --global: Your global aliases
-                --core: Copies this file into this machine's git core directory.
-                        Any 'hooks' aliases will no longer be effective.
-    
-        uninstall
-            Undoes the effects of 'install'.
-    
-        setup
-            Installs the multiplexer hooks into the .git/hooks directory. These
-            scripts are the core of the git-hooks functionality. They are
-            responsible for running any configured custom scripts according to
-            your specifications (sequential vs parallel, disabled, etc.). This
-            operation alse creates the .githooks directory and moves any existing
-            hooks into it. Any scripts moved in this process will receive the
-            "-moved" suffix.
-    
-            If "-e" is specified an active example script will be created in the new
-            .githooks directory.
-    
-        add
-            Adds new scripts to be run when their associated git hooks are invoked.
-            <path>... should be a list of paths to external custom scripts. Any
-            paths indicating scripts residing in the .githooks directory will be
-            ignored.
-    
-        rm
-            Removes previously added scripts from being run during git hook
-            invocation.
-    
-        enable
-            Enables a script to be run during git hook invocation. Scripts are
-            enabled by default.
-    
-        disable
-            Prevents a script from being run during git hook invocation.
-    
-        run
-            Runs a git hook or an individual custom script. stdin and any extra
-            arguments will be forwarded to the designated target.
-    
-        parallel
-            Modify the hooks.<git hook>.parallel config setting. <num> should be
-            the desired number of jobs to spawn when running the hook scripts. If
-            <num> is not provided, it will display the current setting. If <num>
-            is 0, it will be interpreted as the number of CPUs as seen by cpuid. If
-            <num> is "-", the current setting will be cleared and the hook will
-            not be run in parallel mode.
-    
-            When running in parallel, each script's output is buffered until it
-            finishes. When complete, the output will be written to stdout.
-    
-        show-input
-            Modify the hooks.<git hook>.showinput config setting. If no value is
-            provided, it will display the current setting. If this setting is true,
-            the received arguments and stdin will be displayed during git hook
-            invocation.
-    
-        help
-            Displays this help message.
-    
-    Writing custom git hook scripts:
-    
-        Once "git-hooks setup" has been called for your repository, creating and
-        installing your own hooks is a simple matter of placing them in the newly-
-        created .githooks directory. Your hooks must follow a particular naming
-        convention:
-    
+git-hooks - A tool for managing and invoking custom git hook scripts.
+
+Description:
+    git-hooks is a tool to facilitate git hook management, specifically being
+    able to store your hooks within the repository itself and simply reference
+    them from a multiplexer hook installed in the .git/hooks directory.
+
+    The expected usage is to write an arbitrary number of individual hook
+    scripts for a single standard git hook and store them in the .githooks
+    directory. When git invokes the multiplexer script in .git/hooks, it
+    will call your custom scripts sequentially, or in parallel if you configure
+    it to do so.
+
+    This way you can break your monolithic hooks into individual files, giving
+    you greater flexibility regarding which pieces to run and when.
+
+Usage:
+        git hooks  # equivalent to list
+    or: git hooks list [<git hook>...]
+    or: git hooks install [--local] [--global] [--core] [-t|--template] [-s|--setup]
+    or: git hooks uninstall [--local] [--global] [--core]
+    or: git hooks setup [-e]
+    or: git hooks add <path>...
+    or: git hooks rm <custom script name>...
+    or: git hooks enable <git hook>... <custom script name>...
+    or: git hooks disable <git hook>... <custom script name>...
+    or: git hooks run <git hook>|<custom script name>
+    or: git hooks parallel <git hook> [<num>]
+    or: git hooks show-input <git hook> [true|false]
+    or: git hooks config 
+    or: git hooks help 
+
+Files:
+    .githooks/
+        This is where git-hooks will look for default hook scripts. Place your
+        hook scripts in here rather than .git/hooks. Your hook scripts should
+        be executable and follow the naming convention:
+
             <standard git hook name>-<custom suffix>
+
+        Examples: .githooks/pre-commit-style.sh
+                  .githooks/pre-commit-unittest.py
+
+    .git/config
+        git-hooks config settings will be stored in your repository's config
+        file. In the case of a bare repository, the config file is located at
+        ./config.
+
+Common Arguments:
+    <path>...
+        The command accepts a list of path strings.
+
+    <git hook>...
+        The command accepts a list of git hook names. These names should only
+        include the names of the standard git hooks:
+
+            applypatch-msg
+            commit-msg
+            post-checkout
+            post-commit
+            post-merge
+            post-receive
+            post-update
+            pre-applypatch
+            pre-commit
+            prepare-commit-msg
+            pre-rebase
+            pre-receive
+            update
+
+    <custom script name>...
+        The command accepts a list of hook script names. These names may
+        indicate scripts in the repo's .githooks directory, or external
+        scripts installed via 'git-hooks add'. Standard git hook names are
+        not considered valid items in this list.
+
+Operations:
+
+    list
+        Lists the currently available custom scripts for each standard git
+        hook. If any are disabled, it is noted in the output.
+
+    install
+        Installs 'git-hooks' into any of three locations.
+            --local: The repository's aliases (default)
+            --global: Your global aliases
+            --core: Copies this file into this machine's git core directory.
+                    Any 'hooks' aliases will no longer be effective.
+            -t|--template: Installs the multiplexer scripts into
+                           ~/.gittemplate/hooks. This will cause any newly
+                           cloned or created repositories to automatically
+                           populate their .git/hooks directories.
+            -s|--setup: Run the setup command once installation is complete.
+
+    uninstall
+        Undoes the effects of 'install'.
+
+    setup
+        Installs the multiplexer hooks into the .git/hooks directory. These
+        scripts are the core of the git-hooks functionality. They are
+        responsible for running any configured custom scripts according to
+        your specifications (sequential vs parallel, disabled, etc.). This
+        operation alse creates the .githooks directory and moves any existing
+        hooks into it. Any scripts moved in this process will receive the
+        "-moved" suffix.
     
-        When a git hook is invoked it will look for your hooks scripts with the
-        corresponding prefix and call them according to your config. By default
-        your scripts will be run sequentially in alphabetical order as they appear
-        in the .githooks directory.
+        If "-e" is specified an active example script will be created in the new
+        .githooks directory.
+
+    add
+        Adds new scripts to be run when their associated git hooks are invoked.
+        <path>... should be a list of paths to external custom scripts. Any
+        paths indicating scripts residing in the .githooks directory will be
+        ignored.
+
+    rm
+        Removes previously added scripts from being run during git hook invocation.
+
+    enable
+        Enables a script to be run during git hook invocation. Scripts are
+        enabled by default.
+
+    disable
+        Prevents a script from being run during git hook invocation.
+
+    run
+        Runs a git hook or an individual custom script. stdin and any extra
+        arguments will be forwarded to the designated target.
+
+    parallel
+        Modify the hooks.<git hook>.parallel config setting. <num> should be
+        the desired number of jobs to spawn when running the hook scripts. If
+        <num> is not provided, it will display the current setting. If <num>
+        is 0, it will be interpreted as the number of CPUs as seen by cpuid. If
+        <num> is "-", the current setting will be cleared and the hook will
+        not be run in parallel mode.
     
-        You may also add external scripts using the "git-hooks add" command. These
-        scripts need to follow the same naming convention as above, but cannot
-        reside in the .githooks directory. These scripts will run after the ones
-        found in .githooks and will be run sequentially in the order they appear
-        in the .git/config file.
-    
-        Setting the parallel option (see above) will cause all scripts to be run
-        concurrently without regard to their conventional order.
-    
-        Preventing parallel execution:
-    
-            If your script cannot be run in parallel with another of the same
-            git hook family, you may enforce this by calling the exported function
-            "prevent-parallel" from within your script.
-    
-            Example:
-    
-            #! /bin/bash
-            prevent-parallel   # Will exit the hook with a non-zero exit code
-                               # unless it is being run sequentially.
+        When running in parallel, each script's output is buffered until it
+        finishes. When complete, the output will be written to stdout.
+
+    show-input
+        Modify the hooks.<git hook>.showinput config setting. If no value is
+        provided, it will display the current setting. If this setting is true,
+        the received arguments and stdin will be displayed during git hook
+        invocation.
+
+    config
+        Simply lists all hooks-related git config settings.
+
+    help
+        Displays this help message.
+
+Writing custom git hook scripts:
+
+    Once git-hooks setup has been called for your repository, creating and
+    installing your own hooks is a simple matter of placing them in the newly-
+    created .githooks directory. Your hooks must follow a particular naming
+    convention:
+
+        <standard git hook name>-<custom suffix>
+
+    When a git hook is invoked it will look for your hooks scripts with the
+    corresponding prefix and call them according to your config. By default
+    your scripts will be run sequentially in alphabetical order as they appear
+    in the .githooks directory.
+
+    You may also add external scripts using the git-hooks add command. These
+    scripts need to follow the same naming convention as above, but cannot
+    reside in the .githooks directory. These scripts will run after the ones
+    found in .githooks and will be run sequentially in the order they appear
+    in the .git/config file.
+
+    Setting the parallel option (see above) will cause all scripts to be run
+    concurrently without regard to their conventional order.
+
+    Preventing parallel execution:
+
+        If your script cannot be run in parallel with another of the same
+        git hook family, you may enforce this by calling the exported function
+        prevent-parallel from within your script.
+
+        Example:
+
+        #! /bin/bash
+        prevent-parallel   # Will exit the hook with a non-zero exit code
+                           # unless it is being run sequentially.
