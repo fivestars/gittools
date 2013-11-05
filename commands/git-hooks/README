@@ -6,10 +6,10 @@ Description:
     them from a multiplexer hook installed in the .git/hooks directory.
 
     The expected usage is to write an arbitrary number of individual hook
-    scripts for a single standard git hook and store them in the .githooks
-    directory. When git invokes the multiplexer script in .git/hooks, it
-    will call your custom scripts sequentially, or in parallel if you configure
-    it to do so.
+    scripts associated with a single standard git hook and store them in the
+    .githooks directory. When git invokes the multiplexer script in .git/hooks,
+    it will call your custom scripts sequentially, or in parallel if you
+    configure it to do so.
 
     This way you can break your monolithic hooks into individual files, giving
     you greater flexibility regarding which pieces to run and when.
@@ -36,7 +36,7 @@ Files:
         hook scripts in here rather than .git/hooks. Your hook scripts should
         be executable and follow the naming convention:
 
-            <standard git hook name>-<custom suffix>
+            <standard git hook name>-<custom suffix>[.<file extension>]
 
         Examples: .githooks/pre-commit-style.sh
                   .githooks/pre-commit-unittest.py
@@ -67,6 +67,7 @@ Common Arguments:
             pre-rebase
             pre-receive
             update
+            pre-push
 
     <custom script name>...
         The command accepts a list of hook script names. These names may

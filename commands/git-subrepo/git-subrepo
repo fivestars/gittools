@@ -96,10 +96,11 @@ function git-subrepo.help {
     Displays this help message.
 HELP
 
-    if [[ -t 0 ]]; then
-        eval "echo \"$HELP\"" | less
+    if [[ -t 1 ]]; then
+        echo "on command line"
+        (eval "echo \"$HELP\"") | less
     else
-        echo "$HELP"
+        (eval "echo \"$HELP\"")
     fi
 }
 

@@ -4,7 +4,7 @@
 #############################################
 GITHOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge
            post-receive post-update pre-applypatch pre-commit prepare-commit-msg
-           pre-rebase pre-receive update )
+           pre-rebase pre-receive update pre-push )
 
 # HELP
 #############################################
@@ -17,10 +17,10 @@ Description:
     them from a multiplexer hook installed in the .git/hooks directory.
 
     The expected usage is to write an arbitrary number of individual hook
-    scripts for a single standard git hook and store them in the .githooks
-    directory. When git invokes the multiplexer script in .git/hooks, it
-    will call your custom scripts sequentially, or in parallel if you configure
-    it to do so.
+    scripts associated with a single standard git hook and store them in the
+    .githooks directory. When git invokes the multiplexer script in .git/hooks,
+    it will call your custom scripts sequentially, or in parallel if you
+    configure it to do so.
 
     This way you can break your monolithic hooks into individual files, giving
     you greater flexibility regarding which pieces to run and when.
@@ -47,7 +47,7 @@ Files:
         hook scripts in here rather than .git/hooks. Your hook scripts should
         be executable and follow the naming convention:
 
-            <standard git hook name>-<custom suffix>
+            <standard git hook name>-<custom suffix>[.<file extension>]
 
         Examples: .githooks/pre-commit-style.sh
                   .githooks/pre-commit-unittest.py
@@ -401,10 +401,10 @@ function git-hooks.help {
     Displays this help message.
 HELP
 
-    if [[ -t 0 ]]; then
-        eval "echo \"$HELP\"" | less
+    if [[ -t 1 ]]; then
+        (eval "echo \"$HELP\"") | less
     else
-        echo "$HELP"
+        (eval "echo \"$HELP\"")
     fi
 }
 
@@ -787,7 +787,6 @@ HELP
 
     for name in $*; do
         git config --unset hooks.$name.enabled || :
-        echo hey
         if git config hooks.$name.path &>/dev/null; then
             git config --bool hooks.$name.enabled true
         fi
