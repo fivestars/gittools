@@ -1,4 +1,4 @@
-A collection of tools to enhance your git experience.
+A collection of tools to enhance your git command line experience.
 
 ### Commands
 These are scripts that can be installed in *nix environment and then invoked as first-class git commands. They can be installed on a per-repo, per-user or per-machine basis.
