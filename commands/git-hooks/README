@@ -63,11 +63,11 @@ Common Arguments:
             post-update
             pre-applypatch
             pre-commit
-            prepare-commit-msg
+            pre-push
             pre-rebase
             pre-receive
+            prepare-commit-msg
             update
-            pre-push
 
     <custom script name>...
         The command accepts a list of hook script names. These names may

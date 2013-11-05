@@ -98,9 +98,9 @@ HELP
 
     if [[ -t 1 ]]; then
         echo "on command line"
-        (eval "echo \"$HELP\"") | less
+        eval "echo \"$HELP\"" | less
     else
-        (eval "echo \"$HELP\"")
+        eval "echo \"$HELP\""
     fi
 }
 

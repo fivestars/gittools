@@ -3,8 +3,8 @@
 # Global git hook list
 #############################################
 GITHOOKS=( applypatch-msg commit-msg post-checkout post-commit post-merge
-           post-receive post-update pre-applypatch pre-commit prepare-commit-msg
-           pre-rebase pre-receive update pre-push )
+           post-receive post-update pre-applypatch pre-commit pre-push
+           pre-rebase pre-receive prepare-commit-msg update )
 
 # HELP
 #############################################
@@ -402,9 +402,9 @@ function git-hooks.help {
 HELP
 
     if [[ -t 1 ]]; then
-        (eval "echo \"$HELP\"") | less
+        eval "echo \"$HELP\"" | less
     else
-        (eval "echo \"$HELP\"")
+        eval "echo \"$HELP\""
     fi
 }
 
