@@ -793,7 +793,7 @@ HELP
     done
 
     if ! $QUIET; then
-        git-hooks.list $*
+        git-hooks.list
     fi
 }
 
