@@ -668,8 +668,8 @@ HELP
                 if [[ -f ${path} && -n ${path%%*~} ]]; then
                     if git config --get-regexp "hooks\.${path##*/}\.enabled" false &>/dev/null; then
                         hooks="${hooks:+$hooks\0}$path (disabled)"
-                    elif $DISABELD;then
-                        hooks="${hooks:+$hooks\0}$path (disabled by $HOOK)"
+                    elif $DISABLED;then
+                        hooks="${hooks:+$hooks\0}$path (disabeled by $HOOK)"
                     elif [[ ! -x $path ]]; then
                         hooks="${hooks:+$hooks\0}$path (not executable)"
                     else
