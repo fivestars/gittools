@@ -121,6 +121,9 @@ read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
 # Make sure we're not accidentally being called from another multiplexer script
 [[ -z $HOOK ]] && export HOOK=$(basename "$0") || exit
 
+# Determine if we're being run explicitly from git-hooks
+[[ -n $GITHOOKS_RUN ]] || GITHOOKS_RUN=false
+
 # This script will run all configured hooks found in <repository>/.githooks
 # and all hooks found by running:
 #
@@ -222,8 +225,8 @@ count=0
 if ls .githooks/${HOOK}-* &>/dev/null; then
     for hook in .githooks/${HOOK}-*; do
         if [[ -f ${hook} && -n ${hook%%*~} ]]; then
-            if git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null \
-                || git config --get-regexp "hooks\.${hook##*/}\.enabled" false &>/dev/null; then
+            if { ! $GITHOOKS_RUN; } && { git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null \
+                || git config --get-regexp "hooks\.${hook##*/}\.enabled" false &>/dev/null; }; then
                 disabled="${disabled:+$disabled\0}$hook"
             elif [[ ! -x $hook ]]; then
                 nonexecutable="${nonexecutable:+$nonexecutable\0}$hook"
@@ -245,7 +248,7 @@ while read line; do
         missing="${missing:+$missing\0}$hook - $path"
     elif [[ ! -x $path ]]; then
         nonexecutable="${nonexecutable:+$nonexecutable\0}$hook - $path"
-    elif git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null; then
+    elif { ! $GITHOOKS_RUN; } && git config --get-regexp "hooks\.$HOOK\.enabled" false &>/dev/null; then
         disabled="${disabled:+$disabled\0}$path"
     else
         hooks="${hooks:+$hooks\0}$tmpfile.$count $tmpfile.stdin $path"
@@ -577,7 +580,6 @@ HELP
 
     # Move existing hooks to .githooks dir and copy runner script over
     $FIRSTTIME && echo "    Copying any existing hooks to $HOOKSDIR"
-    echo $?
     for hook in ${GITHOOKS[*]}; do
         if $FIRSTTIME \
             && [[ -e $GITDIR/hooks/$hook ]] \
@@ -669,7 +671,7 @@ HELP
                     if git config --get-regexp "hooks\.${path##*/}\.enabled" false &>/dev/null; then
                         hooks="${hooks:+$hooks\0}$path (disabled)"
                     elif $DISABLED;then
-                        hooks="${hooks:+$hooks\0}$path (disabeled by $HOOK)"
+                        hooks="${hooks:+$hooks\0}$path (disabled by $HOOK)"
                     elif [[ ! -x $path ]]; then
                         hooks="${hooks:+$hooks\0}$path (not executable)"
                     else
@@ -777,7 +779,7 @@ DESC
 HELP
 
     local name QUIET=false
-    local TYPE OPT OPTIND OPTARG
+    local OPT OPTIND OPTARG
     while getopts ":q" OPT; do
         case $OPT in
             q) QUIET=true;;
@@ -820,7 +822,15 @@ DESC
     arguments will be forwarded to the designated target.
 HELP
 
-    local HOOK name path
+    local HOOK name path FORCE=false
+
+    local OPT OPTIND OPTARG
+    while getopts ":f" OPT; do
+        case $OPT in
+            f) export GITHOOKS_RUN=true;;
+        esac
+    done
+    shift $((OPTIND-1))
 
     if git-hooks._is-git-hook $1; then
         HOOK=$1
