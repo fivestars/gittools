@@ -1,0 +1,23 @@
+#!/bin/bash -e
+
+if [[ $# -lt 2 ]]; then
+	echo "Usage: $0 <src remote> <dest remote>" >&2
+	exit 1
+fi
+
+SRC=$1
+DST=$2
+
+if ! git remote | grep -q "^${SRC}$";  then
+	echo "$SRC is not a remote for this repository" >&2
+	exit 1
+fi
+
+if ! git remote | grep -q "^${DST}$";  then
+	echo "$DST is not a remote for this repository" >&2
+	exit 1
+fi
+
+for BRANCH in $(git branch --list --remote "${SRC}/*" | grep -v '\->'); do
+	git push $DST ${BRANCH}:refs/heads/${BRANCH//${SRC}\/}
+done
