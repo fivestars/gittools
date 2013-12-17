@@ -1,0 +1,42 @@
+#! /bin/bash -e
+# Create a new bug-fix feature branch based on the current branch.
+
+PARENT=$(git rev-parse --abbrev-ref HEAD)
+if [[ $PARENT == HEAD ]]; then
+    echo "Must be checked out to an existing branch" >&2
+    exit 1
+fi
+
+while getopts ":p" OPT; do
+    case $OPT in
+        p)	if ! INITIALS=$(git config user.initials); then
+            	echo "Must set git config value user.initials first" >&2
+	    		exit 1
+			fi
+			PERSONAL="#$INITIALS";;
+    esac
+done
+shift $((OPTIND-1))
+
+NAME=$1
+if [[ -z $NAME ]]; then
+    echo "Missing argument: name" >&2
+    exit 1
+elif [[ "$NAME" =~ *-* ]]; then
+	echo "Cannot have a '-' in the name" >&2
+	exit 1
+elif [[ "$NAME" =~ *#* ]]; then
+	echo "Cannot have a '#' in the name" >&2
+	exit 1
+fi
+
+if [[ $NAME =~ ^[0-9]+$ ]]; then
+	$NAME=J$NAME
+fi
+
+BASE=${PARENT}-
+if [[ ${PARENT} == "master" ]]; then
+	BASE=
+fi
+
+git checkout -b ${BASE}${NAME}${PERSONAL}

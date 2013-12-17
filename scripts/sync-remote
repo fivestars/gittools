@@ -19,5 +19,6 @@ if ! git remote | grep -q "^${DST}$";  then
 fi
 
 for BRANCH in $(git branch --list --remote "${SRC}/*" | grep -v '\->'); do
+	echo $BRANCH
 	git push $DST ${BRANCH}:refs/heads/${BRANCH//${SRC}\/}
 done

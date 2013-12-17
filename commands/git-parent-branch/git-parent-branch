@@ -1,0 +1,30 @@
+#! /bin/bash -e
+# Navigate to the parent branch and check it out.
+# Delete the feature branch if requested.
+
+CURRENT=$(git rev-parse --abbrev-ref HEAD)
+if [[ $CURRENT == HEAD ]]; then
+    echo "Must be checked out to an existing branch" >&2
+    exit 1
+fi
+
+DELETE=
+while getopts ":dD" OPT; do
+    case $OPT in
+        d) DELETE=-d;;
+		D) DELETE=-D;;
+    esac
+done
+shift $((OPTIND-1))
+
+PARENT=${CURRENT%-*}
+
+if [[ $PARENT == $CURRENT ]]; then
+	PARENT=master
+fi
+
+git checkout $PARENT
+
+if [[ -n $DELETE ]]; then
+	git branch $DELETE $CURRENT
+fi
