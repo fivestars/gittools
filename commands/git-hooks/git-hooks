@@ -527,6 +527,21 @@ HELP
             echo "Could not remove from $(git --exec-path)";;
         esac
     fi
+
+    if $TEMPLATE; then
+        git config --global --path init.templatedir ~/.gittemplate
+        mkdir -p ~/.gittemplate/hooks
+        pushd ~/.gittemplate/hooks >/dev/null
+        shopt -s nullglob
+        for hook in ${GITHOOKS[*]}; do
+            for file in ${hook}*; do
+                [[ $file == "${hook}*" ]] && break;
+                rm -i $file
+            done
+        done
+        shopt -u nullglob
+        popd >/dev/null
+    fi
 }
 
 function git-hooks.setup {
