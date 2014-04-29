@@ -218,7 +218,7 @@ hooks=
 missing=
 disabled=
 nonexecutable=
-tmpfile=$(mktemp -u)
+tmpfile=/tmp/$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 32)
 count=0
 
 # Look in the default location of .githooks
@@ -469,7 +469,7 @@ HELP
         chmod +x ~/.gittemplate/hooks/git-hooks-multiplexer
         pushd ~/.gittemplate/hooks >/dev/null
         for hook in ${GITHOOKS[*]}; do
-            ln -bs ~/.gittemplate/hooks/git-hooks-multiplexer $hook
+            ln -is ~/.gittemplate/hooks/git-hooks-multiplexer $hook
         done
         pushd >/dev/null
         cat <<EOF
