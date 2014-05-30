@@ -129,7 +129,7 @@ read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
 #
 #    git config --get-regexp "hooks\.$HOOK\.enabled" true
 #
-# It will fail if any of those return non-zero exit codes. You can disable 
+# It will fail if any of those return non-zero exit codes. You can disable
 # individual hooks through git configs:
 #
 #    # Disable all custom hooks for this git hook
@@ -272,7 +272,7 @@ function is-parallel {
 }
 export -f is-parallel
 
-hooks_parallel="-P $(git config hooks.$HOOK.parallel)" || hooks_parallel="-P 1"
+hooks_parallel="-P $(git config hooks.$HOOK.parallel)" || hooks_parallel=
 if [[ 0 == $(git config hooks.$HOOK.parallel) ]]; then
     hooks_parallel="-P $(grep -c processor /proc/cpuinfo)"
 fi
@@ -283,9 +283,18 @@ trap "rm -f ${tmpfile}.stdin; cat ${tmpfile}* 2>/dev/null; rm -f ${tmpfile}*" EX
 # Save our stdin so we can feed it to multiple scripts
 [[ -t 0 ]] && touch ${tmpfile}.stdin || cat >${tmpfile}.stdin
 
-# Run the hooks through xargs. If any of them fail, xargs will fail and the script
-# will exit with an error code due to the -e at the top of this script.
-echo -en $hooks | xargs -0 -I {} $hooks_parallel bash -e $CAPTURE {} $*
+# Decide whether to run in parallel or sequentially
+if [[ -n $hooks_parallel ]]; then
+    # Run the hooks through xargs. If any of them fail, xargs will fail and the script
+    # will exit with an error code due to the -e at the top of this script.
+    echo -en $hooks | xargs -0 -I {} $hooks_parallel bash -e $CAPTURE {} $*
+else
+    IFS=$'\n'
+    for hook in $(echo $hooks | sed s/\\\\0/\\n/g); do
+        bash -e $CAPTURE $hook $*
+    done
+    unset IFS
+fi
 
 # All hooks succeeded, reset our trap for cleanup and manually display the results
 trap "rm -f ${tmpfile}* /tmp/capture.$$" EXIT SIGHUP SIGINT SIGTERM
@@ -379,7 +388,6 @@ function git-hooks._extract_desc {
 }
 
 function git-hooks._extract_help {
-    local COMMAND=$1
     while read COMMAND; do
         echo -e "\n    ${COMMAND}"
         git-hooks._extract_doc -h git-hooks.${COMMAND} | sed 's/^/    /g'
@@ -404,10 +412,16 @@ function git-hooks.help {
     Displays this help message.
 HELP
 
-    if [[ -t 1 ]]; then
-        eval "echo \"$HELP\"" | less
+    if [[ -n $1 ]]; then
+        git-hooks._extract_desc $1
+        echo
+        git-hooks._extract_doc -h "git-hooks.$1"
     else
-        eval "echo \"$HELP\""
+        if [[ -t 1 ]]; then
+            eval "echo \"$HELP\"" | less
+        else
+            eval "echo \"$HELP\""
+        fi
     fi
 }
 
@@ -889,7 +903,7 @@ HELP
 
 function git-hooks.parallel {
     : <<DESC
-    <git hook> [<num>]
+    <git hook> [<num>|-]
 DESC
     : <<HELP
     Modify the hooks.<git hook>.parallel config setting. <num> should be
