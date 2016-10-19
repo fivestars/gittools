@@ -1,5 +1,5 @@
 ### ps1-git.sh
-Provides _ps1-git_, a function that can be invoked from within your custom PS* strings.
+Provides `ps1-git`, a function that can be invoked from within your custom PS* strings.
 
 It produces a quick summary of your repo state including:
 
