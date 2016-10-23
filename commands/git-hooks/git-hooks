@@ -1,4 +1,5 @@
-#! /bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 # Global git hook list
 #############################################
@@ -107,7 +108,7 @@ Writing custom git hook scripts:
 
         Example:
 
-        #! /bin/bash
+        #!/usr/bin/env bash
         prevent-parallel   # Will exit the hook with a non-zero exit code
                            # unless it is being run sequentially.
 
@@ -116,7 +117,8 @@ HELP
 # Multiplexer script
 #############################################
 read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
-#! /bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 # Make sure we're not accidentally being called from another multiplexer script
 [[ -z $HOOK ]] && export HOOK=$(basename "$0") || exit
@@ -154,7 +156,7 @@ read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
 # set to anything but 1.
 #
 #    Example:
-#        #! /bin/bash
+#        #!/usr/bin/env bash
 #        prevent-parallel   # Will fail the hook unless
 #                           # it is being run sequentially.
 #
@@ -162,7 +164,7 @@ read -r -d '' MULTIPLEXER <<"MULTIPLEXER" || :
 CAPTURE=/tmp/capture.$$
 
 cat <<"EOF" >$CAPTURE
-#! /bin/bash
+#!/usr/bin/env bash
 
 function prevent-parallel {
     if is-parallel; then
@@ -218,8 +220,11 @@ hooks=
 missing=
 disabled=
 nonexecutable=
-tmpfile=/tmp/$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 32)
+tmpfile=$(mktemp)
 count=0
+
+# Set a trap to clean up our temp file
+trap "rm -f ${tmpfile}*" EXIT SIGHUP SIGINT SIGTERM
 
 # Look in the default location of .githooks
 if ls .githooks/${HOOK}-* &>/dev/null; then
@@ -625,7 +630,7 @@ HELP
     if $EXAMPLES; then
         if $BARE; then
             cat <<EOF >$HOOKSDIR/pre-receive-report
-#! /bin/bash
+#!/usr/bin/env bash
 cat <<MESSAGE
 ------------------------------------------------------------------------
 This is an example hook to demonstrate pre-receive hook functionality.
@@ -648,7 +653,7 @@ EOF
             chmod +x $HOOKSDIR/pre-receive-report
         else
             cat <<EOF >$HOOKSDIR/commit-msg-jira
-#! /bin/bash
+#!/usr/bin/env bash
 
 cat <<MESSAGE
 ------------------------------------------------------------------------
@@ -759,7 +764,7 @@ HELP
 
         # Make sure we're not trying to add one that's already in .githooks
         if [[ -e $HOOKSDIR/$name ]] && \
-           [[ "$(stat -c %d:%i $HOOKSDIR/$name)" == "$(stat -c %d:%i) $path)" ]]; then
+           [[ "$(stat -c %d:%i $HOOKSDIR/$name)" == "$(stat -c %d:%i $path))" ]]; then
             echo "  Cannot add a script that is already in .githooks" >&2
             continue
         fi
