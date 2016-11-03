@@ -220,7 +220,7 @@ hooks=
 missing=
 disabled=
 nonexecutable=
-tmpfile=$(mktemp)
+tmpfile=$(mktemp -t git_hooks.XXXX)
 count=0
 
 # Set a trap to clean up our temp file
