@@ -185,8 +185,8 @@ function capture_on_exit {
 read capture_outfile infile hook <<<$1
 shift
 
-# Redirect infile to stdin
-exec 10<&0 0<$infile
+# Redirect $infile to stdin if our hook expects inbound input
+[[ $HOOK == post-rewrite ]] && exec 10<&0 0<$infile
 
 # Report which hook is running
 echo "[running $HOOK git hook: $hook]"
