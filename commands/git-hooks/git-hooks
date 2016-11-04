@@ -461,7 +461,7 @@ HELP
     $GLOBAL || $CORE || LOCAL=true
 
     if $LOCAL; then
-        git config alias.hooks "!$BASH_SOURCE_FULL" && \
+        git config alias.hooks "!.git/hooks/git-hooks" && \
             echo "Added \"hooks\" to your repository's aliases."
     fi
 
@@ -501,6 +501,9 @@ script or "git-hooks install -t" again, all repositories will run the new
 multiplexer script.
 EOF
     fi
+
+    # Copy this file into the repositories .git/hooks dir
+    cp $BASH_SOURCE_FULL $GITDIR/hooks
 
     if $SETUP; then
         git-hooks.setup
@@ -625,6 +628,9 @@ HELP
         echo "$MULTIPLEXER" >$GITDIR/hooks/$hook
         chmod +x $GITDIR/hooks/$hook
     done
+
+    # Copy this file into the repositories .git/hooks dir
+    cp $BASH_SOURCE_FULL $GITDIR/hooks
 
     # Sample script to demonstrate new hook functionality
     if $EXAMPLES; then
