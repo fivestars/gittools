@@ -1,4 +1,4 @@
-#! /bin/sh 
+#! /bin/sh
 # Source from .bashrc
 #
 # Provides:
@@ -45,7 +45,7 @@ function ps1-git() {
 	if  [[ ! -e $GITDIR/.prompt_last ]] ||	# first time in this repo ||
 		$FORCE ||							# we're forcing it ||
 		 									# ( the last command was a successful git command ) ||
-		( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) || 
+		( [[ $RESULT == 0 ]] && history 1 | grep "git *\(status\|add\|commit\|push\|pull\|fetch\|rebase\|merge\|checkout\|reset\)" >/dev/null ) ||
 		 									# ( the prompt is out of date )
 		( [[ -n $WAIT ]] && [[ $(stat -c %Y $GITDIR/.prompt_last) < $(date -d "$WAIT" +%s) ]] ) ; then
 
@@ -71,7 +71,7 @@ function ps1-git() {
 		local NEW=$(git ls-files -o --exclude-standard $REPO | wc -l)
 		local EDITS=$(git ls-files -dm $REPO | wc -l)
 		local STAGED=$(git diff --name-only --cached| wc -l)
-		
+
 		# How do we display changes in our working directory and index?
 		if [[ -z $SHORT ]]; then
 			# Full, spelled-out file states
@@ -88,13 +88,13 @@ function ps1-git() {
 			local BEHIND=$(git rev-list ^refs/heads/$BRANCH $UPSTREAM -- | wc -l)
 			local AHEAD=$(git rev-list refs/heads/$BRANCH ^$UPSTREAM -- | wc -l)
 
-			[[ $BEHIND != 0 ]] && STATII=( "${STATII[*]}" "${BEHIND}v" )
-			[[ $AHEAD != 0 ]] && STATII=( "${STATII[*]}" "${AHEAD}^" )
+			[[ $BEHIND != 0 ]] && STATII=( "${STATII[*]}" "${BEHIND}\xE2\x86\x93" )
+			[[ $AHEAD != 0 ]] && STATII=( "${STATII[*]}" "${AHEAD}\xE2\x86\x91" )
 		fi
 
 		# Reduce the array to a string
-		STATII=$(echo -n ${STATII[*]})
-		
+		STATII="$(echo -n ${STATII[*]})"
+
 		# Display branch information (upstream, too, if available)
 		local BRANCHES
 		if [[ -z $BRANCH ]]; then
@@ -102,11 +102,11 @@ function ps1-git() {
 		elif [[ -z $UPSTREAM ]]; then
 			BRANCHES="[$BRANCH]"
 		else
-			BRANCHES="[$BRANCH->$UPSTREAM]"
+			BRANCHES="[$BRANCH \xE2\x86\x92 $UPSTREAM]"
 		fi
-		
+
 		# Write the prompt string to cache file
-		echo "${BRANCHES}(${STATII})" >$GITDIR/.prompt_last
+		echo -e "${BRANCHES}(${STATII})" >$GITDIR/.prompt_last
 
 		# Color code to white to let us know this is a fresh status
 		echo -en ${BEFORE}
