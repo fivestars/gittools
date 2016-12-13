@@ -63,8 +63,7 @@ function ps1-git() {
 		fi
 
 		# Determine our upstream branch
-		local UPSTREAM
-		UPSTREAM=$(git rev-parse --abbrev-ref @{u} 2>/dev/null) || UPSTREAM=
+		local UPSTREAM=$(git rev-parse --abbrev-ref @{u} 2>/dev/null || :)
 
 		# Collect our statii in this empty array
 		local STATII=()
