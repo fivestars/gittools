@@ -432,10 +432,10 @@ HELP
 
 function git-hooks.install {
     : <<DESC
-    [--local] [--global] [--core] [-t|--template] [-s|--setup]
+    [--local] [--global] [--core] [-t|--template]
 DESC
     : <<HELP
-    Installs 'git-hooks' into any of three locations.
+    Installs 'git-hooks' command into any of three locations.
         --local: The repository's aliases (default)
         --global: Your global aliases
         --core: Copies this file into this machine's git core directory.
@@ -444,17 +444,15 @@ DESC
                        ~/.gittemplate/hooks. This will cause any newly
                        cloned or created repositories to automatically
                        populate their .git/hooks directories.
-        -s|--setup: Run the setup command once installation is complete.
 HELP
 
-    local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false SETUP=false CHOICE
+    local TOKEN LOCAL=false GLOBAL=false CORE=false TEMPLATE=false CHOICE
     for TOKEN in "$@"; do
         case $TOKEN in
             --local) shift; LOCAL=true;;
             --global) shift; GLOBAL=true;;
             --core) shift; CORE=true;;
             -t|--template) shift; TEMPLATE=true;;
-            -s|--setup) shift; SETUP=true;;
             *) echo "Unknown option: $TOKEN"; return 1;;
         esac
     done
@@ -505,7 +503,7 @@ EOF
     # Copy this file into the repositories .git/hooks dir
     cp $BASH_SOURCE_FULL $GITDIR/hooks
 
-    if $SETUP; then
+    if git -C .. rev-parse &>/dev/null; then
         git-hooks.setup
     fi
 }
